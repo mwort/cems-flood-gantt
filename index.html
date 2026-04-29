@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interactive Dependency Gantt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="bg-orb bg-orb-a" aria-hidden="true"></div>
+  <div class="bg-orb bg-orb-b" aria-hidden="true"></div>
+
+  <main class="layout">
+    <section class="runtime-notice" id="runtime-notice" hidden>
+      <h2>Load Task Data</h2>
+      <p id="runtime-message"></p>
+      <label class="file-picker" for="local-data-file">Choose data.json</label>
+      <input id="local-data-file" type="file" accept=".json,application/json,.ndjson,text/plain" />
+      <p class="runtime-hint">When this page is opened with <span>file://</span>, browsers block automatic reads from nearby files. A local server still works best, but you can also pick data.json here.</p>
+    </section>
+
+    <div class="zoom-controls">
+      <button data-zoom="Day">Day</button>
+      <button data-zoom="Week">Week</button>
+      <button data-zoom="Month">Month</button>
+      <button id="dependency-toggle" type="button">Deps: All</button>
+    </div>
+
+    <section class="panel chart-panel">
+      <div id="gantt"></div>
+    </section>
+
+    <section class="panel data-panel">
+      <h2>Current Task JSON</h2>
+      <pre id="task-json" aria-live="polite"></pre>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
