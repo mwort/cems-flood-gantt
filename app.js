@@ -4,7 +4,9 @@ const model = {
   tasks: [],
   byId: new Map(),
   topoOrder: [],
-  gantt: null
+  gantt: null,
+  collapsedGroups: new Set(),
+  columnWidths: { id: 64, task: 240, assignee: 140, startDate: 74, endDate: 74, progress: 52 }
 };
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -35,9 +37,11 @@ let taskSidebarCleanup = null;
 let customTodayLineCleanup = null;
 let taskSidebarCollapsed = false;
 let hasAutoCenteredOnToday = false;
+let sidebarResizeCleanup = null;
 
 
 async function bootstrap() {
+  loadColumnWidths();
   setupLocalFileLoader();
   try {
     const raw = await loadTaskJson();
@@ -198,6 +202,7 @@ function normalizeTasks(rawTasks) {
       dependencies: normalizeIdList(task["Blocked by"] ?? task.dependencies),
       blocking: normalizeIdList(task.Blocking),
       progress: normalizeProgress(task.progress),
+      group: task.group ?? null,
       dependents: [],
       startMs,
       endMs
@@ -358,6 +363,58 @@ function reindex() {
   }
 }
 
+function buildGroups() {
+  const groups = new Map();
+  for (const task of model.tasks) {
+    if (!task.group) continue;
+    if (!groups.has(task.group)) {
+      groups.set(task.group, { tasks: [], startMs: Infinity, endMs: -Infinity });
+    }
+    const g = groups.get(task.group);
+    g.tasks.push(task);
+    if (task.startMs < g.startMs) g.startMs = task.startMs;
+    if (task.endMs > g.endMs) g.endMs = task.endMs;
+  }
+  return groups;
+}
+
+function buildVisibleTasks() {
+  const groups = buildGroups();
+  const orderedGroupNames = [];
+  const seenGroups = new Set();
+  for (const task of model.tasks) {
+    if (task.group && !seenGroups.has(task.group)) {
+      seenGroups.add(task.group);
+      orderedGroupNames.push(task.group);
+    }
+  }
+
+  const result = [];
+  for (const groupName of orderedGroupNames) {
+    const group = groups.get(groupName);
+    const collapsed = model.collapsedGroups.has(groupName);
+    result.push({
+      id: `__group__${groupName}`,
+      name: (collapsed ? "▶ " : "▼ ") + groupName,
+      startMs: group.startMs,
+      endMs: group.endMs,
+      progress: 0,
+      dependencies: [],
+      blocking: [],
+      dependents: [],
+      isGroupHeader: true,
+      groupName
+    });
+    if (!collapsed) {
+      result.push(...group.tasks);
+    }
+  }
+  for (const task of model.tasks) {
+    if (!task.group) result.push(task);
+  }
+  return result;
+}
+
 function floorToDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -389,6 +446,31 @@ function getTaskSidebarWidth() {
   return taskSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
 }
 
+function loadColumnWidths() {
+  try {
+    const stored = localStorage.getItem('ganttColumnWidths');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      model.columnWidths = { ...model.columnWidths, ...parsed };
+    }
+  } catch (e) {
+    // localStorage not available, use defaults
+  }
+}
+
+function saveColumnWidths() {
+  try {
+    localStorage.setItem('ganttColumnWidths', JSON.stringify(model.columnWidths));
+  } catch (e) {
+    // localStorage not available
+  }
+}
+
+function getColumnGridTemplate() {
+  const w = model.columnWidths;
+  return `${w.id}px ${w.task}px ${w.assignee}px ${w.startDate}px ${w.endDate}px ${w.progress}px`;
+}
+
 function applyChartInsets() {
   const chartPanel = ganttContainer.closest(".chart-panel") || ganttContainer.parentElement;
   if (!chartPanel) {
@@ -405,7 +487,31 @@ function formatSidebarDate(ms) {
   return `${month}/${day}`;
 }
 
+function renderGroupHeaderSidebarRow(task) {
+  const arrow = model.collapsedGroups.has(task.groupName) ? "▶" : "▼";
+  if (taskSidebarCollapsed) {
+    return [
+      `<div class="task-sidebar-row task-sidebar-row--group task-sidebar-row--collapsed" data-group="${task.groupName}" title="${task.groupName}">`,
+      `<div class="task-sidebar-cell">${arrow}</div>`,
+      `</div>`
+    ].join("");
+  }
+  return [
+    `<div class="task-sidebar-row task-sidebar-row--group" data-group="${task.groupName}" style="grid-template-columns: ${getColumnGridTemplate()}">`,
+    `<div class="task-sidebar-cell task-sidebar-cell--id">${arrow}</div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--task task-sidebar-cell--group-name">${task.groupName}</div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--assignee"></div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--date">${formatSidebarDate(task.startMs)}</div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--date">${formatSidebarDate(task.endMs)}</div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--progress"></div>`,
+    `</div>`
+  ].join("");
+}
+
 function renderTaskSidebarRow(task) {
+  if (task.isGroupHeader) {
+    return renderGroupHeaderSidebarRow(task);
+  }
   if (taskSidebarCollapsed) {
     return [
       `<div class="task-sidebar-row task-sidebar-row--collapsed" title="${task.name}">`,
@@ -415,7 +521,7 @@ function renderTaskSidebarRow(task) {
   }
 
   return [
-    `<div class="task-sidebar-row">`,
+    `<div class="task-sidebar-row" style="grid-template-columns: ${getColumnGridTemplate()}">`,
     `<div class="task-sidebar-cell task-sidebar-cell--id">${task.id}</div>`,
     `<div class="task-sidebar-cell task-sidebar-cell--task" title="${task.name}">${task.name}</div>`,
     `<div class="task-sidebar-cell task-sidebar-cell--assignee" title="${task.assignee || "Unassigned"}">${task.assignee || "Unassigned"}</div>`,
@@ -454,7 +560,7 @@ function createTaskSidebar() {
   const columns = taskSidebarCollapsed
     ? `<div class="task-sidebar-columns task-sidebar-columns--collapsed"><span>ID</span></div>`
     : [
-        `<div class="task-sidebar-columns">`,
+        `<div class="task-sidebar-columns" style="grid-template-columns: ${getColumnGridTemplate()}">`,
         `<span>ID</span>`,
         `<span>Task</span>`,
         `<span>Owner</span>`,
@@ -470,7 +576,7 @@ function createTaskSidebar() {
     `<button class="task-sidebar-toggle" type="button" aria-expanded="${String(!taskSidebarCollapsed)}" aria-label="${taskSidebarCollapsed ? "Expand" : "Collapse"} task sidebar">${taskSidebarCollapsed ? "»" : "«"}</button>`,
     `</div>`,
     `<div class="task-sidebar-body">`,
-    `<div class="task-sidebar-rows">${model.tasks.map(renderTaskSidebarRow).join("")}</div>`,
+    `<div class="task-sidebar-rows">${buildVisibleTasks().map(renderTaskSidebarRow).join("")}</div>`,
     `</div>`
   ].join("");
 
@@ -478,6 +584,7 @@ function createTaskSidebar() {
 
   const rows = sidebar.querySelector(".task-sidebar-rows");
   const toggle = sidebar.querySelector(".task-sidebar-toggle");
+  const columnsHeader = sidebar.querySelector(".task-sidebar-columns");
   const syncSidebar = () => {
     sidebar.style.transform = `translate(${baseLeft}px, ${baseTop}px)`;
     if (rows) {
@@ -490,6 +597,104 @@ function createTaskSidebar() {
     taskSidebarCollapsed = !taskSidebarCollapsed;
     renderChart();
   });
+
+  sidebar.addEventListener("click", (e) => {
+    const groupRow = e.target.closest(".task-sidebar-row--group[data-group]");
+    if (!groupRow) return;
+    const groupName = groupRow.dataset.group;
+    if (model.collapsedGroups.has(groupName)) {
+      model.collapsedGroups.delete(groupName);
+    } else {
+      model.collapsedGroups.add(groupName);
+    }
+    renderChart();
+  });
+
+  // Setup column resize handlers
+  if (columnsHeader && !taskSidebarCollapsed) {
+    const columnPairs = [
+      ["id", "task"],
+      ["task", "assignee"],
+      ["assignee", "startDate"],
+      ["startDate", "endDate"],
+      ["endDate", "progress"]
+    ];
+
+    const updateResizerPositions = () => {
+      const w = model.columnWidths;
+      const positions = {
+        "id-task": w.id,
+        "task-assignee": w.id + w.task,
+        "assignee-startDate": w.id + w.task + w.assignee,
+        "startDate-endDate": w.id + w.task + w.assignee + w.startDate,
+        "endDate-progress": w.id + w.task + w.assignee + w.startDate + w.endDate
+      };
+      for (const [pair, pos] of Object.entries(positions)) {
+        const resizer = columnsHeader.querySelector(`[data-column="${pair}"]`);
+        if (resizer) {
+          resizer.style.left = `${pos}px`;
+        }
+      }
+    };
+
+    // Create resizers as overlays
+    for (const [leftCol, rightCol] of columnPairs) {
+      const resizer = document.createElement("div");
+      resizer.className = "column-resizer";
+      resizer.setAttribute("data-column", `${leftCol}-${rightCol}`);
+      columnsHeader.appendChild(resizer);
+
+      resizer.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startLeftWidth = model.columnWidths[leftCol];
+        const startRightWidth = model.columnWidths[rightCol];
+
+        const onMouseMove = (moveEvent) => {
+          const deltaX = moveEvent.clientX - startX;
+          const newLeftWidth = Math.max(40, startLeftWidth + deltaX);
+          const newRightWidth = Math.max(40, startRightWidth - deltaX);
+
+          model.columnWidths[leftCol] = newLeftWidth;
+          model.columnWidths[rightCol] = newRightWidth;
+          saveColumnWidths();
+
+          const gridTemplate = getColumnGridTemplate();
+
+          // Update header columns
+          columnsHeader.style.gridTemplateColumns = gridTemplate;
+
+          // Update all task rows in the sidebar
+          const allRows = sidebar.querySelectorAll(".task-sidebar-row");
+          for (const row of allRows) {
+            row.style.gridTemplateColumns = gridTemplate;
+          }
+
+          updateResizerPositions();
+        };
+
+        const onMouseUp = () => {
+          document.removeEventListener("mousemove", onMouseMove);
+          document.removeEventListener("mouseup", onMouseUp);
+          resizer.style.opacity = "";
+        };
+
+        resizer.style.opacity = "1";
+        document.addEventListener("mousemove", onMouseMove);
+        document.addEventListener("mouseup", onMouseUp);
+      });
+
+      resizer.addEventListener("mouseenter", () => {
+        resizer.style.opacity = "0.8";
+      });
+
+      resizer.addEventListener("mouseleave", () => {
+        resizer.style.opacity = "";
+      });
+    }
+
+    updateResizerPositions();
+  }
 
   syncSidebar();
 
@@ -742,13 +947,15 @@ function renderChart(forceCenterToday = false) {
   const scrollLeft = ganttContainer.scrollLeft;
   const scrollTop = ganttContainer.scrollTop;
   ganttContainer.innerHTML = "";
-  model.gantt = new Gantt("#gantt", model.tasks.map(toChartTask), {
+  const visibleTasks = buildVisibleTasks();
+  model.gantt = new Gantt("#gantt", visibleTasks.map(toChartTask), {
     view_mode: currentViewMode,
     bar_height: 24,
     padding: 12,
     column_width: 34,
     date_format: "YYYY-MM-DD",
     custom_popup_html: (task) => {
+      if (task.id.startsWith("__group__")) return "<div></div>";
       const internal = model.byId.get(task.id);
       return [
         `<div class=\"details-container\">`,
@@ -763,6 +970,7 @@ function renderChart(forceCenterToday = false) {
       ].join("");
     },
     on_date_change: (task, start, end) => {
+      if (task.id.startsWith("__group__")) return;
       handleDateChange(task.id, dateToMs(start), dateToMs(end));
     }
   });
@@ -859,10 +1067,6 @@ function setupDependencyHoverTracking() {
   });
 
   ganttContainer.addEventListener("click", (event) => {
-    if (dependencyDisplayMode !== "hover") {
-      return;
-    }
-
     const target = event.target;
     if (!(target instanceof Element)) {
       return;
@@ -870,6 +1074,21 @@ function setupDependencyHoverTracking() {
 
     const wrapper = target.closest(".bar-wrapper[data-id]");
     const clickedId = wrapper ? wrapper.getAttribute("data-id") : null;
+
+    if (clickedId && clickedId.startsWith("__group__")) {
+      const groupName = clickedId.slice("__group__".length);
+      if (model.collapsedGroups.has(groupName)) {
+        model.collapsedGroups.delete(groupName);
+      } else {
+        model.collapsedGroups.add(groupName);
+      }
+      renderChart();
+      return;
+    }
+
+    if (dependencyDisplayMode !== "hover") {
+      return;
+    }
 
     if (clickedId && clickedId !== selectedTaskId) {
       selectedTaskId = clickedId;

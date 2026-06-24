@@ -284,7 +284,6 @@ body {
   display: grid;
   grid-template-columns: 64px minmax(0, 2fr) minmax(0, 1.4fr) 74px 74px 52px;
   align-items: center;
-  gap: 0.55rem;
   height: 100%;
   padding: 0 3rem 0 0.85rem;
   font-size: 0.72rem;
@@ -292,6 +291,8 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-soft);
+  position: relative;
+  overflow: visible;
 }
 
 .task-sidebar-columns--collapsed {
@@ -318,6 +319,30 @@ body {
   line-height: 1;
 }
 
+.column-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  opacity: 0.3;
+  transition: opacity 0.15s ease;
+  background: linear-gradient(90deg, transparent 0%, rgba(16, 42, 67, 0.4) 50%, transparent 100%);
+  z-index: 100;
+  margin-left: -4px;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.column-resizer:hover {
+  opacity: 1 !important;
+  background: linear-gradient(90deg, transparent 0%, rgba(16, 42, 67, 1) 50%, transparent 100%);
+}
+
+.task-sidebar-header .column-resizer {
+  display: block;
+}
+
 .task-sidebar-body {
   position: relative;
   height: calc(100% - 60px);
@@ -332,7 +357,6 @@ body {
   display: grid;
   grid-template-columns: 64px minmax(0, 2fr) minmax(0, 1.4fr) 74px 74px 52px;
   align-items: center;
-  gap: 0.55rem;
   min-height: 36px;
   padding: 0 0.85rem;
   border-bottom: 1px solid rgba(16, 42, 67, 0.06);
@@ -392,6 +416,46 @@ body {
 
 #gantt g.arrow path.dependency-hidden {
   opacity: 0;
+}
+
+/* Group header bars */
+#gantt .bar-wrapper[data-id^="__group__"] .bar {
+  fill: var(--ink);
+  opacity: 0.82;
+}
+
+#gantt .bar-wrapper[data-id^="__group__"] .bar-progress {
+  display: none;
+}
+
+#gantt .bar-wrapper[data-id^="__group__"] .bar-label {
+  fill: #fff;
+  font-weight: 700;
+}
+
+#gantt .bar-wrapper[data-id^="__group__"] {
+  cursor: pointer;
+}
+
+/* Group header rows in sidebar */
+.task-sidebar-rows .task-sidebar-row--group {
+  background: rgba(16, 42, 67, 0.84);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.task-sidebar-rows .task-sidebar-row--group:hover {
+  background: rgba(16, 42, 67, 0.95);
+}
+
+.task-sidebar-rows .task-sidebar-row--group .task-sidebar-cell {
+  color: #fff;
+}
+
+.task-sidebar-rows .task-sidebar-row--group .task-sidebar-cell--group-name {
+  font-weight: 700;
+  letter-spacing: 0.03em;
 }
 
 .data-panel {
