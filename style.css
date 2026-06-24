@@ -269,6 +269,23 @@ body {
   backdrop-filter: blur(10px);
 }
 
+.task-sidebar-boundary-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 120;
+  opacity: 0.38;
+  background: linear-gradient(90deg, transparent 0%, rgba(16, 42, 67, 0.45) 50%, transparent 100%);
+  transition: opacity 0.15s ease;
+}
+
+.task-sidebar-boundary-resizer:hover {
+  opacity: 1;
+}
+
 .task-sidebar.is-collapsed {
   border-radius: 16px;
 }

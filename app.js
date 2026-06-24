@@ -6,7 +6,8 @@ const model = {
   topoOrder: [],
   gantt: null,
   collapsedGroups: new Set(),
-  columnWidths: { id: 64, task: 240, assignee: 140, startDate: 74, endDate: 74, progress: 52 }
+  columnWidths: { id: 64, task: 240, assignee: 140, startDate: 74, endDate: 74, progress: 52 },
+  sidebarWidth: null
 };
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -23,6 +24,7 @@ const runtimeMessage = document.getElementById("runtime-message");
 const localDataFileInput = document.getElementById("local-data-file");
 const zoomControls = document.querySelector('.zoom-controls');
 const dependencyToggle = document.getElementById("dependency-toggle");
+const downloadJsonButton = document.getElementById("download-json");
 let currentViewMode = 'Day';
 let dependencyDisplayMode = "hover";
 let hoveredTaskId = null;
@@ -42,6 +44,7 @@ let sidebarResizeCleanup = null;
 
 async function bootstrap() {
   loadColumnWidths();
+  loadSidebarWidth();
   setupLocalFileLoader();
   try {
     const raw = await loadTaskJson();
@@ -72,6 +75,7 @@ function initializeApp(raw) {
   renderJson();
   setupZoomControls();
   setupDependencyControls();
+  setupDownloadButton();
   setupDependencyHoverTracking();
   hideRuntimeNotice();
 }
@@ -443,7 +447,23 @@ function toChartTask(task) {
 }
 
 function getTaskSidebarWidth() {
-  return taskSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
+  if (taskSidebarCollapsed) {
+    return SIDEBAR_COLLAPSED_WIDTH;
+  }
+
+  if (Number.isFinite(model.sidebarWidth) && model.sidebarWidth > 0) {
+    return model.sidebarWidth;
+  }
+
+  return getAutoSidebarExpandedWidth();
+}
+
+function getAutoSidebarExpandedWidth() {
+  const w = model.columnWidths;
+  const columnsTotal = w.id + w.task + w.assignee + w.startDate + w.endDate + w.progress;
+  const horizontalPadding = 62; // matches header/row left + right padding used for grid content
+  const borderAllowance = 6;
+  return Math.max(SIDEBAR_EXPANDED_WIDTH, columnsTotal + horizontalPadding + borderAllowance);
 }
 
 function loadColumnWidths() {
@@ -461,6 +481,31 @@ function loadColumnWidths() {
 function saveColumnWidths() {
   try {
     localStorage.setItem('ganttColumnWidths', JSON.stringify(model.columnWidths));
+  } catch (e) {
+    // localStorage not available
+  }
+}
+
+function loadSidebarWidth() {
+  try {
+    const stored = localStorage.getItem('ganttSidebarWidth');
+    if (!stored) {
+      return;
+    }
+    const parsed = Number(stored);
+    if (Number.isFinite(parsed) && parsed >= 220 && parsed <= 1600) {
+      model.sidebarWidth = parsed;
+    }
+  } catch (e) {
+    // localStorage not available, use defaults
+  }
+}
+
+function saveSidebarWidth() {
+  try {
+    if (Number.isFinite(model.sidebarWidth) && model.sidebarWidth > 0) {
+      localStorage.setItem('ganttSidebarWidth', String(Math.round(model.sidebarWidth)));
+    }
   } catch (e) {
     // localStorage not available
   }
@@ -582,6 +627,14 @@ function createTaskSidebar() {
 
   chartPanel.appendChild(sidebar);
 
+  let boundaryResizer = null;
+  if (!taskSidebarCollapsed) {
+    boundaryResizer = document.createElement("div");
+    boundaryResizer.className = "task-sidebar-boundary-resizer";
+    boundaryResizer.setAttribute("title", "Resize sidebar");
+    sidebar.appendChild(boundaryResizer);
+  }
+
   const rows = sidebar.querySelector(".task-sidebar-rows");
   const toggle = sidebar.querySelector(".task-sidebar-toggle");
   const columnsHeader = sidebar.querySelector(".task-sidebar-columns");
@@ -671,6 +724,13 @@ function createTaskSidebar() {
           }
 
           updateResizerPositions();
+
+          if (!Number.isFinite(model.sidebarWidth)) {
+            const autoWidth = getAutoSidebarExpandedWidth();
+            sidebar.style.width = `${autoWidth}px`;
+            applyChartInsets();
+            syncSidebar();
+          }
         };
 
         const onMouseUp = () => {
@@ -694,6 +754,35 @@ function createTaskSidebar() {
     }
 
     updateResizerPositions();
+  }
+
+  if (boundaryResizer) {
+    boundaryResizer.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = getTaskSidebarWidth();
+
+      const onMouseMove = (moveEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+        const minWidth = 220;
+        const maxWidth = Math.max(500, window.innerWidth - 140);
+        const nextWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + deltaX));
+        model.sidebarWidth = nextWidth;
+        saveSidebarWidth();
+        sidebar.style.width = `${nextWidth}px`;
+        applyChartInsets();
+        syncSidebar();
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        renderChart();
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
   }
 
   syncSidebar();
@@ -1031,6 +1120,37 @@ function setupDependencyControls() {
   updateDependencyToggleUI();
 }
 
+function setupDownloadButton() {
+  if (!downloadJsonButton || downloadJsonButton.dataset.ready === "true") {
+    return;
+  }
+
+  downloadJsonButton.addEventListener("click", () => {
+    const payload = buildOutputPayload();
+    const content = `${JSON.stringify(payload, null, 2)}\n`;
+    const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `data_export_${todayStamp()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  downloadJsonButton.dataset.ready = "true";
+}
+
+function todayStamp() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+
 function setupDependencyHoverTracking() {
   if (dependencyHoverReady) {
     return;
@@ -1190,6 +1310,25 @@ function handleDateChange(taskId, newStartMs, newEndMs) {
   const oldStartMs = task.startMs;
   const oldEndMs = task.endMs;
 
+  const pointerMode = activeEditMode;
+  const inferredMode = classifyEdit(oldStartMs, oldEndMs, newStartMs, newEndMs);
+  let mode = pointerMode || inferredMode;
+  activeEditMode = null;
+
+  // Frappe can occasionally report a one-day start shift when resizing right.
+  if (!pointerMode
+    && mode === "move"
+    && (newStartMs - oldStartMs) === -DAY_MS
+    && newEndMs > oldEndMs) {
+    mode = "resize-right";
+  }
+
+  if (mode === "resize-right") {
+    newStartMs = oldStartMs;
+  } else if (mode === "resize-left") {
+    newEndMs = oldEndMs;
+  }
+
   if (newEndMs <= newStartMs) {
     newEndMs = newStartMs + DAY_MS;
   }
@@ -1198,10 +1337,6 @@ function handleDateChange(taskId, newStartMs, newEndMs) {
   task.endMs = newEndMs;
   task.durationDays = Math.max(1, Math.round((task.endMs - task.startMs) / DAY_MS));
   task.endMs = task.startMs + task.durationDays * DAY_MS;
-
-  const inferredMode = classifyEdit(oldStartMs, oldEndMs, task.startMs, task.endMs);
-  const mode = activeEditMode || inferredMode;
-  activeEditMode = null;
 
   if (mode === "resize-left") {
     propagateUpstream(task.id);
@@ -1347,7 +1482,13 @@ function enforceForwardConstraints() {
 }
 
 function renderJson() {
-  const payload = model.tasks.map((task) => ({
+  const payload = buildOutputPayload();
+
+  jsonOutput.textContent = JSON.stringify(payload, null, 2);
+}
+
+function buildOutputPayload() {
+  return model.tasks.map((task) => ({
     ID: task.sourceId,
     Title: task.name,
     Description: task.description,
@@ -1357,10 +1498,9 @@ function renderJson() {
     progress: task.progress,
     start: task.startMs,
     end: task.endMs,
-    time: task.durationDays
+    time: task.durationDays,
+    group: task.group ?? null
   }));
-
-  jsonOutput.textContent = JSON.stringify(payload, null, 2);
 }
 
 function normalizeOutputId(value) {
