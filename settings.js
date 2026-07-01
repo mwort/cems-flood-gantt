@@ -10,9 +10,8 @@ window.GANTT_SETTINGS = {
   // (only works when served over http) or the "Load JSON" file picker.
   //
   // Example: "https://raw.githubusercontent.com/your-user/your-repo/main/data.json"
-  dataUrl: "https://sites.ecmwf.int/cems-flood/release-planning/s/admin/api/raw/data.json",
+  dataUrl: "https://raw.githubusercontent.com/mwort/cems-flood-gantt/refs/heads/main/data/glofas_v5_efas_v6.json",
 
   // Default chart title shown in the top bar (used until you edit it in the UI).
   title: "EFAS and GloFAS release planning"
 };
-https://sites.ecmwf.int/cems-flood/release-planning/s/admin/api/raw/data.json
