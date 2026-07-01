@@ -15,6 +15,14 @@ const GANTT_HEADER_HEIGHT = 60;
 const GANTT_ROW_HEIGHT = 36;
 const SIDEBAR_EXPANDED_WIDTH = 540;
 const SIDEBAR_COLLAPSED_WIDTH = 56;
+const MIN_GANTT_COLUMN_WIDTH = 18;
+const MAX_GANTT_COLUMN_WIDTH = 220;
+const GANTT_COLUMN_WIDTH_STEP = 2;
+const DEFAULT_GANTT_COLUMN_WIDTH_BY_MODE = {
+  Day: 38,
+  Week: 140,
+  Month: 120
+};
 
 
 const ganttContainer = document.getElementById("gantt");
@@ -25,7 +33,18 @@ const localDataFileInput = document.getElementById("local-data-file");
 const zoomControls = document.querySelector('.zoom-controls');
 const dependencyToggle = document.getElementById("dependency-toggle");
 const downloadJsonButton = document.getElementById("download-json");
+const loadJsonButton = document.getElementById("load-json");
+const refreshDataButton = document.getElementById("refresh-data");
+const columnWidthMinusButton = document.getElementById("column-width-minus");
+const columnWidthPlusButton = document.getElementById("column-width-plus");
+const columnWidthValue = document.getElementById("column-width-value");
+const appTitleInput = document.getElementById("app-title");
+
+function getSettingsScriptElement() {
+  return document.getElementById("gantt-settings-script");
+}
 let currentViewMode = 'Day';
+let ganttColumnWidthByMode = { ...DEFAULT_GANTT_COLUMN_WIDTH_BY_MODE };
 let dependencyDisplayMode = "hover";
 let hoveredTaskId = null;
 let selectedTaskId = null;
@@ -33,6 +52,7 @@ let activeEditMode = null;
 let interactionTrackingReady = false;
 let localFileLoaderReady = false;
 let dependencyControlsReady = false;
+let columnWidthControlsReady = false;
 let dependencyHoverReady = false;
 let stickyTimelineCleanup = null;
 let taskSidebarCleanup = null;
@@ -45,14 +65,44 @@ let sidebarResizeCleanup = null;
 async function bootstrap() {
   loadColumnWidths();
   loadSidebarWidth();
+  loadGanttColumnWidth();
+  setupTitleBar();
   setupLocalFileLoader();
+  setupLoadButton();
+  setupRefreshButton();
+
+  const dataUrl = getConfiguredDataUrl();
+
+  // Prefer the local working copy so edits survive a reload.
+  const cached = loadCachedTaskData();
+  if (cached) {
+    try {
+      initializeApp(cached);
+      return;
+    } catch (cacheError) {
+      // fall through to remote / local file / picker if the cache is unusable
+    }
+  }
+
+  if (dataUrl) {
+    try {
+      const raw = await loadTaskJsonFromUrl(dataUrl);
+      initializeApp(raw);
+      return;
+    } catch (remoteError) {
+      // fall through to local data.json / picker
+    }
+  }
+
   try {
     const raw = await loadTaskJson();
     initializeApp(raw);
   } catch (error) {
     const message = [
-      "Could not load ./data.json automatically.",
-      "Choose data.json with the file picker below.",
+      dataUrl
+        ? "Could not load task data from the configured URL or ./data.json."
+        : "Could not load ./data.json automatically.",
+      "Set dataUrl in settings.js, or choose a file with the picker below.",
       error.message
     ].join("\n");
 
@@ -74,8 +124,11 @@ function initializeApp(raw) {
   renderChart();
   renderJson();
   setupZoomControls();
+  setupColumnWidthControls();
   setupDependencyControls();
   setupDownloadButton();
+  setupLoadButton();
+  setupRefreshButton();
   setupDependencyHoverTracking();
   hideRuntimeNotice();
 }
@@ -109,12 +162,146 @@ async function loadTaskJson() {
     const response = await fetch("./data.json", { cache: "no-store" });
     if (response.ok) {
       const text = await response.text();
-      return parseTaskPayload(text);
+      const parsed = parseTaskPayload(text);
+      cacheTaskData(text);
+      return parsed;
     }
 
     throw new Error(`Request failed with status ${response.status}`);
   } catch (error) {
     throw new Error(`Unable to load tasks from data.json: ${error.message}`);
+  }
+}
+
+function getConfiguredDataUrl() {
+  const settings = window.GANTT_SETTINGS;
+  if (!settings || typeof settings.dataUrl !== "string") {
+    return "";
+  }
+  return settings.dataUrl.trim();
+}
+
+function getConfiguredTitle() {
+  const settings = window.GANTT_SETTINGS;
+  if (!settings || typeof settings.title !== "string") {
+    return "";
+  }
+  return settings.title.trim();
+}
+
+async function reloadSettingsScript() {
+  const settingsScript = getSettingsScriptElement();
+  if (!settingsScript || !settingsScript.parentNode) {
+    return;
+  }
+
+  const baseSrc = settingsScript.getAttribute("src") || "./settings.js";
+  const cacheBust = `${baseSrc}${baseSrc.includes("?") ? "&" : "?"}t=${Date.now()}`;
+
+  await new Promise((resolve, reject) => {
+    const reloaded = document.createElement("script");
+    reloaded.id = settingsScript.id;
+    reloaded.src = cacheBust;
+
+    reloaded.addEventListener("load", () => {
+      settingsScript.remove();
+      resolve();
+    }, { once: true });
+
+    reloaded.addEventListener("error", () => {
+      reloaded.remove();
+      reject(new Error(`Unable to reload settings from ${baseSrc}`));
+    }, { once: true });
+
+    settingsScript.parentNode.insertBefore(reloaded, settingsScript.nextSibling);
+  });
+}
+
+async function loadTaskJsonFromUrl(url) {
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (response.ok) {
+      const text = await response.text();
+      const parsed = parseTaskPayload(text);
+      cacheTaskData(text);
+      return parsed;
+    }
+
+    throw new Error(`Request failed with status ${response.status}`);
+  } catch (error) {
+    throw new Error(`Unable to load tasks from ${url}: ${error.message}`);
+  }
+}
+
+function cacheTaskData(text) {
+  try {
+    localStorage.setItem("ganttDataCache", text);
+  } catch (error) {
+    // localStorage not available
+  }
+}
+
+function setupTitleBar(forceFromSettings = false) {
+  if (!appTitleInput) {
+    return;
+  }
+
+  const defaultTitle = getConfiguredTitle()
+    || appTitleInput.value
+    || "Project Timeline";
+
+  if (forceFromSettings) {
+    appTitleInput.value = defaultTitle;
+    document.title = defaultTitle;
+    return;
+  }
+
+  if (appTitleInput.dataset.ready === "true") {
+    return;
+  }
+
+  appTitleInput.value = defaultTitle;
+  try {
+    const stored = localStorage.getItem("ganttTitle");
+    if (stored !== null) {
+      appTitleInput.value = stored;
+    }
+  } catch (error) {
+    // localStorage not available, keep default
+  }
+
+  const persist = () => {
+    const value = appTitleInput.value.trim() || defaultTitle;
+    appTitleInput.value = value;
+    document.title = value;
+    try {
+      localStorage.setItem("ganttTitle", value);
+    } catch (error) {
+      // localStorage not available
+    }
+  };
+
+  document.title = appTitleInput.value.trim() || defaultTitle;
+  appTitleInput.addEventListener("change", persist);
+  appTitleInput.addEventListener("blur", persist);
+  appTitleInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      appTitleInput.blur();
+    }
+  });
+
+  appTitleInput.dataset.ready = "true";
+}
+
+function loadCachedTaskData() {
+  try {
+    const stored = localStorage.getItem("ganttDataCache");
+    if (!stored) {
+      return null;
+    }
+    return parseTaskPayload(stored);
+  } catch (error) {
+    return null;
   }
 }
 
@@ -132,6 +319,7 @@ function setupLocalFileLoader() {
     try {
       const text = await file.text();
       const raw = parseTaskPayload(text);
+      cacheTaskData(text);
       initializeApp(raw);
       localDataFileInput.value = "";
     } catch (error) {
@@ -527,9 +715,9 @@ function applyChartInsets() {
 
 function formatSidebarDate(ms) {
   const date = new Date(ms);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
-  return `${month}/${day}`;
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
 }
 
 function renderGroupHeaderSidebarRow(task) {
@@ -566,13 +754,13 @@ function renderTaskSidebarRow(task) {
   }
 
   return [
-    `<div class="task-sidebar-row" style="grid-template-columns: ${getColumnGridTemplate()}">`,
+    `<div class="task-sidebar-row" data-task-id="${task.id}" style="grid-template-columns: ${getColumnGridTemplate()}">`,
     `<div class="task-sidebar-cell task-sidebar-cell--id">${task.id}</div>`,
-    `<div class="task-sidebar-cell task-sidebar-cell--task" title="${task.name}">${task.name}</div>`,
-    `<div class="task-sidebar-cell task-sidebar-cell--assignee" title="${task.assignee || "Unassigned"}">${task.assignee || "Unassigned"}</div>`,
-    `<div class="task-sidebar-cell task-sidebar-cell--date">${formatSidebarDate(task.startMs)}</div>`,
-    `<div class="task-sidebar-cell task-sidebar-cell--date">${formatSidebarDate(task.endMs)}</div>`,
-    `<div class="task-sidebar-cell task-sidebar-cell--progress">${task.progress}%</div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--task" title="${task.name}"><input class="task-sidebar-input" data-field="name" type="text" value="${task.name}"></div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--assignee" title="${task.assignee || "Unassigned"}"><input class="task-sidebar-input" data-field="assignee" type="text" value="${task.assignee || ""}" placeholder="Unassigned"></div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--date"><input class="task-sidebar-input" data-field="startMs" type="date" value="${msToDateString(task.startMs)}"></div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--date"><input class="task-sidebar-input" data-field="endMs" type="date" value="${msToDateString(task.endMs)}"></div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--progress"><input class="task-sidebar-input" data-field="progress" type="number" min="0" max="100" step="1" value="${task.progress}"></div>`,
     `</div>`
   ].join("");
 }
@@ -592,9 +780,9 @@ function createTaskSidebar() {
   const paddingTop = parseFloat(styles.paddingTop) || 0;
   const panelRect = chartPanel.getBoundingClientRect();
   const ganttRect = ganttContainer.getBoundingClientRect();
-  const baseLeft = ganttRect.left - panelRect.left + Math.max(0, paddingLeft - getTaskSidebarWidth());
+  const baseLeft = ganttRect.left - panelRect.left;
   const baseTop = ganttRect.top - panelRect.top + paddingTop;
-  const sidebarHeight = Math.max(180, ganttContainer.clientHeight - paddingTop * 2);
+  const sidebarHeight = Math.max(180, ganttContainer.clientHeight - paddingTop);
 
   const sidebar = document.createElement("aside");
   sidebar.className = `task-sidebar${taskSidebarCollapsed ? " is-collapsed" : ""}`;
@@ -661,6 +849,68 @@ function createTaskSidebar() {
       model.collapsedGroups.add(groupName);
     }
     renderChart();
+  });
+
+  sidebar.addEventListener("change", (e) => {
+    const input = e.target.closest(".task-sidebar-input");
+    if (!input) {
+      return;
+    }
+
+    const row = input.closest(".task-sidebar-row[data-task-id]");
+    if (!row) {
+      return;
+    }
+
+    const taskId = row.dataset.taskId;
+    if (!taskId || taskId.startsWith("__group__")) {
+      return;
+    }
+
+    const task = model.byId.get(taskId);
+    if (!task) {
+      return;
+    }
+
+    const field = input.dataset.field;
+    if (!field) {
+      return;
+    }
+
+    if (field === "name") {
+      task.name = String(input.value || task.id).trim() || task.id;
+      renderChart();
+      renderJson();
+      return;
+    }
+
+    if (field === "assignee") {
+      const assignee = String(input.value || "").trim();
+      task.assignee = assignee || null;
+      renderChart();
+      renderJson();
+      return;
+    }
+
+    if (field === "progress") {
+      task.progress = normalizeProgress(input.value);
+      renderChart();
+      renderJson();
+      return;
+    }
+
+    if (field === "startMs" || field === "endMs") {
+      const valueMs = normalizeTimestamp(input.value);
+      if (!Number.isFinite(valueMs) || valueMs <= 0) {
+        renderChart();
+        return;
+      }
+
+      const nextStart = field === "startMs" ? valueMs : task.startMs;
+      const nextEnd = field === "endMs" ? valueMs : task.endMs;
+
+      handleDateChange(task.id, nextStart, nextEnd);
+    }
   });
 
   // Setup column resize handlers
@@ -1041,7 +1291,7 @@ function renderChart(forceCenterToday = false) {
     view_mode: currentViewMode,
     bar_height: 24,
     padding: 12,
-    column_width: 34,
+    column_width: getActiveGanttColumnWidth(),
     date_format: "YYYY-MM-DD",
     custom_popup_html: (task) => {
       if (task.id.startsWith("__group__")) return "<div></div>";
@@ -1063,6 +1313,10 @@ function renderChart(forceCenterToday = false) {
       handleDateChange(task.id, dateToMs(start), dateToMs(end));
     }
   });
+
+  // Frappe 0.6.1 resets column_width from view_mode defaults internally.
+  applyCustomGanttColumnWidth();
+
   // Restore scroll position after render
   ganttContainer.scrollLeft = scrollLeft;
   ganttContainer.scrollTop = scrollTop;
@@ -1085,10 +1339,119 @@ function setupZoomControls() {
     const mode = btn.getAttribute('data-zoom');
     if (mode && mode !== currentViewMode) {
       currentViewMode = mode;
+      updateColumnWidthControlState();
       renderChart(true);
     }
   });
   updateZoomActive();
+}
+
+function setupColumnWidthControls() {
+  if (columnWidthControlsReady) {
+    updateColumnWidthControlState();
+    return;
+  }
+
+  if (columnWidthMinusButton) {
+    columnWidthMinusButton.addEventListener("click", () => {
+      const current = getActiveGanttColumnWidth();
+      ganttColumnWidthByMode[currentViewMode] = clampGanttColumnWidth(current - GANTT_COLUMN_WIDTH_STEP);
+      saveGanttColumnWidth();
+      updateColumnWidthControlState();
+      renderChart();
+    });
+  }
+
+  if (columnWidthPlusButton) {
+    columnWidthPlusButton.addEventListener("click", () => {
+      const current = getActiveGanttColumnWidth();
+      ganttColumnWidthByMode[currentViewMode] = clampGanttColumnWidth(current + GANTT_COLUMN_WIDTH_STEP);
+      saveGanttColumnWidth();
+      updateColumnWidthControlState();
+      renderChart();
+    });
+  }
+
+  columnWidthControlsReady = true;
+  updateColumnWidthControlState();
+}
+
+function updateColumnWidthControlState() {
+  const activeWidth = getActiveGanttColumnWidth();
+  if (columnWidthValue) {
+    columnWidthValue.textContent = `${currentViewMode}: ${activeWidth}px`;
+  }
+  if (columnWidthMinusButton) {
+    columnWidthMinusButton.disabled = activeWidth <= MIN_GANTT_COLUMN_WIDTH;
+  }
+  if (columnWidthPlusButton) {
+    columnWidthPlusButton.disabled = activeWidth >= MAX_GANTT_COLUMN_WIDTH;
+  }
+}
+
+function getActiveGanttColumnWidth() {
+  const configured = ganttColumnWidthByMode[currentViewMode];
+  if (Number.isFinite(configured)) {
+    return clampGanttColumnWidth(configured);
+  }
+  const fallback = DEFAULT_GANTT_COLUMN_WIDTH_BY_MODE[currentViewMode] ?? DEFAULT_GANTT_COLUMN_WIDTH_BY_MODE.Day;
+  return clampGanttColumnWidth(fallback);
+}
+
+function applyCustomGanttColumnWidth() {
+  if (!model.gantt || !model.gantt.options) {
+    return;
+  }
+
+  const width = getActiveGanttColumnWidth();
+  if (model.gantt.options.column_width === width) {
+    return;
+  }
+
+  model.gantt.options.column_width = width;
+  model.gantt.setup_dates();
+  model.gantt.render();
+}
+
+function clampGanttColumnWidth(value) {
+  return Math.max(MIN_GANTT_COLUMN_WIDTH, Math.min(MAX_GANTT_COLUMN_WIDTH, Math.round(value)));
+}
+
+function loadGanttColumnWidth() {
+  try {
+    const stored = localStorage.getItem("ganttChartColumnWidth");
+    if (!stored) {
+      return;
+    }
+
+    // Backward compatibility with older single-number storage.
+    const legacy = Number(stored);
+    if (Number.isFinite(legacy)) {
+      ganttColumnWidthByMode.Day = clampGanttColumnWidth(legacy);
+      ganttColumnWidthByMode.Week = clampGanttColumnWidth(legacy);
+      ganttColumnWidthByMode.Month = clampGanttColumnWidth(legacy);
+      return;
+    }
+
+    const parsed = JSON.parse(stored);
+    if (parsed && typeof parsed === "object") {
+      for (const mode of Object.keys(DEFAULT_GANTT_COLUMN_WIDTH_BY_MODE)) {
+        if (Number.isFinite(Number(parsed[mode]))) {
+          ganttColumnWidthByMode[mode] = clampGanttColumnWidth(Number(parsed[mode]));
+        }
+      }
+    }
+  } catch (e) {
+    // localStorage not available, use default
+  }
+}
+
+function saveGanttColumnWidth() {
+  try {
+    localStorage.setItem("ganttChartColumnWidth", JSON.stringify(ganttColumnWidthByMode));
+  } catch (e) {
+    // localStorage not available
+  }
 }
 
 function updateZoomActive() {
@@ -1140,6 +1503,62 @@ function setupDownloadButton() {
   });
 
   downloadJsonButton.dataset.ready = "true";
+}
+
+function setupLoadButton() {
+  if (!loadJsonButton || loadJsonButton.dataset.ready === "true") {
+    return;
+  }
+
+  setupLocalFileLoader();
+
+  loadJsonButton.addEventListener("click", () => {
+    if (localDataFileInput) {
+      localDataFileInput.click();
+    }
+  });
+
+  loadJsonButton.dataset.ready = "true";
+}
+
+function setupRefreshButton() {
+  if (!refreshDataButton || refreshDataButton.dataset.ready === "true") {
+    return;
+  }
+
+  refreshDataButton.addEventListener("click", async () => {
+    const confirmed = window.confirm(
+      "Refresh from the configured URL? This discards local edits and reloads the source data."
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    const originalLabel = refreshDataButton.textContent;
+    refreshDataButton.disabled = true;
+    refreshDataButton.textContent = "Refreshing…";
+
+    try {
+      await reloadSettingsScript();
+      setupTitleBar(true);
+
+      const dataUrl = getConfiguredDataUrl();
+      if (!dataUrl) {
+        showRuntimeNotice("No data URL is configured. Set dataUrl in settings.js to refresh from a hosted source.");
+        return;
+      }
+
+      const raw = await loadTaskJsonFromUrl(dataUrl);
+      initializeApp(raw);
+    } catch (error) {
+      showRuntimeNotice(["Could not refresh from the configured URL.", error.message].join("\n"));
+    } finally {
+      refreshDataButton.disabled = false;
+      refreshDataButton.textContent = originalLabel;
+    }
+  });
+
+  refreshDataButton.dataset.ready = "true";
 }
 
 function todayStamp() {
@@ -1485,6 +1904,7 @@ function renderJson() {
   const payload = buildOutputPayload();
 
   jsonOutput.textContent = JSON.stringify(payload, null, 2);
+  cacheTaskData(JSON.stringify(payload));
 }
 
 function buildOutputPayload() {

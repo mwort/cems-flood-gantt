@@ -14,6 +14,10 @@
   <div class="bg-orb bg-orb-a" aria-hidden="true"></div>
   <div class="bg-orb bg-orb-b" aria-hidden="true"></div>
 
+  <header class="app-title-bar">
+    <input id="app-title" class="app-title-input" type="text" value="Project Timeline" aria-label="Chart title" spellcheck="false" />
+  </header>
+
   <main class="layout">
     <section class="runtime-notice" id="runtime-notice" hidden>
       <h2>Load Task Data</h2>
@@ -23,13 +27,23 @@
       <p class="runtime-hint">When this page is opened with <span>file://</span>, browsers block automatic reads from nearby files. A local server still works best, but you can also pick data.json here.</p>
     </section>
 
-    <div class="zoom-controls">
-      <button data-zoom="Day">Day</button>
-      <button data-zoom="Week">Week</button>
-      <button data-zoom="Month">Month</button>
-      <button id="dependency-toggle" type="button">Deps: All</button>
-      <button id="download-json" type="button">Download JSON</button>
-    </div>
+    <details class="settings-drawer">
+      <summary class="settings-drawer-toggle" aria-label="Open settings" title="Settings">⚙</summary>
+      <div class="zoom-controls">
+        <button data-zoom="Day">Day</button>
+        <button data-zoom="Week">Week</button>
+        <button data-zoom="Month">Month</button>
+        <div class="column-width-controls" aria-label="Gantt column width controls">
+          <button id="column-width-minus" type="button" aria-label="Decrease column width">-</button>
+          <span id="column-width-value">Cols: 34px</span>
+          <button id="column-width-plus" type="button" aria-label="Increase column width">+</button>
+        </div>
+        <button id="dependency-toggle" type="button">Deps: All</button>
+        <button id="refresh-data" type="button">Refresh from URL</button>
+        <button id="load-json" type="button">Load JSON</button>
+        <button id="download-json" type="button">Download JSON</button>
+      </div>
+    </details>
 
     <section class="panel chart-panel">
       <div id="gantt"></div>
@@ -42,6 +56,7 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+  <script id="gantt-settings-script" src="./settings.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
