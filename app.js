@@ -1637,6 +1637,9 @@ function setupRefreshButton() {
       await reloadSettingsScript();
       setupTitleBar(true);
 
+      // Wipe the local working copy so the reload uses the freshly fetched URL data.
+      try { localStorage.removeItem("ganttDataCache"); } catch (e) { /* ignore */ }
+
       const dataUrl = getConfiguredDataUrl();
       if (!dataUrl) {
         showRuntimeNotice("No data URL is configured. Set dataUrl in settings.js to refresh from a hosted source.");
