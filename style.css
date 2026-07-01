@@ -342,6 +342,17 @@ body {
   display: block;
 }
 
+/* Milestone vertical lines */
+.chart-panel .gantt-milestone-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 22;
+  width: 0;
+  border-left: 1px dashed rgba(180, 40, 40, 0.6);
+  pointer-events: none;
+}
+
 .chart-panel .gantt-custom-today {
   position: absolute;
   top: 0;
@@ -548,6 +559,21 @@ body {
 
 #gantt g.arrow path.dependency-hidden {
   opacity: 0;
+}
+
+/* Milestone bars */
+#gantt .bar-wrapper.is-milestone .bar {
+  fill: #b42828;
+  opacity: 0.88;
+}
+
+#gantt .bar-wrapper.is-milestone .bar-progress {
+  fill: #7a1010;
+}
+
+#gantt .bar-wrapper.is-milestone .bar-label {
+  fill: #fff;
+  font-weight: 700;
 }
 
 /* Group header bars */

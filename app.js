@@ -57,6 +57,7 @@ let dependencyHoverReady = false;
 let stickyTimelineCleanup = null;
 let taskSidebarCleanup = null;
 let customTodayLineCleanup = null;
+let milestoneLinesCleanup = null;
 let taskSidebarCollapsed = false;
 let hasAutoCenteredOnToday = false;
 let sidebarResizeCleanup = null;
@@ -395,6 +396,7 @@ function normalizeTasks(rawTasks) {
       blocking: normalizeIdList(task.Blocking),
       progress: normalizeProgress(task.progress),
       group: task.group ?? null,
+      milestone: task.milestone === true || task.milestone === "true",
       dependents: [],
       startMs,
       endMs
@@ -1267,6 +1269,94 @@ function createCustomTodayLine() {
   };
 }
 
+function createMilestoneLines() {
+  if (milestoneLinesCleanup) {
+    milestoneLinesCleanup();
+  }
+
+  const chartPanel = ganttContainer.closest(".chart-panel") || ganttContainer.parentElement;
+  const svg = ganttContainer.querySelector("svg.gantt");
+  if (!chartPanel || !svg) {
+    return;
+  }
+
+  // Build the same date→x linear model used by resolveTodayLineX.
+  const points = [];
+  for (const wrapper of svg.querySelectorAll(".bar-wrapper[data-id]")) {
+    const id = wrapper.getAttribute("data-id");
+    const bar = wrapper.querySelector("rect.bar");
+    const x = bar ? Number(bar.getAttribute("x")) : NaN;
+    const task = id ? model.byId.get(String(id)) : null;
+    if (!task || !Number.isFinite(task.startMs) || !Number.isFinite(x)) {
+      continue;
+    }
+    points.push({ ms: task.startMs, x });
+  }
+
+  if (points.length < 2) {
+    return;
+  }
+
+  let sumMs = 0, sumX = 0;
+  for (const p of points) { sumMs += p.ms; sumX += p.x; }
+  const meanMs = sumMs / points.length;
+  const meanX = sumX / points.length;
+  let num = 0, den = 0;
+  for (const p of points) {
+    const dMs = p.ms - meanMs;
+    num += dMs * (p.x - meanX);
+    den += dMs * dMs;
+  }
+  if (den === 0) return;
+  const slope = num / den;
+  const intercept = meanX - slope * meanMs;
+
+  const milestones = model.tasks.filter((t) => t.milestone);
+  if (milestones.length === 0) return;
+
+  const styles = getComputedStyle(ganttContainer);
+  const paddingLeft = parseFloat(styles.paddingLeft) || 0;
+  const paddingTop = parseFloat(styles.paddingTop) || 0;
+  const panelRect = chartPanel.getBoundingClientRect();
+  const ganttRect = ganttContainer.getBoundingClientRect();
+  const baseLeft = ganttRect.left - panelRect.left + paddingLeft;
+  const baseTop = ganttRect.top - panelRect.top + paddingTop;
+  const lineHeight = Math.max(80, ganttContainer.clientHeight - paddingTop * 2 - GANTT_HEADER_HEIGHT);
+
+  const markers = milestones.map((task) => {
+    const xInSvg = slope * task.endMs + intercept;
+    const line = document.createElement("div");
+    line.className = "gantt-milestone-line";
+    line.title = task.name;
+    line.style.height = `${lineHeight}px`;
+    chartPanel.appendChild(line);
+
+    // Mark the bar wrapper in the SVG for CSS styling.
+    const barWrapper = svg.querySelector(`.bar-wrapper[data-id="${task.id}"]`);
+    if (barWrapper) {
+      barWrapper.classList.add("is-milestone");
+    }
+
+    return { line, xInSvg };
+  });
+
+  const syncAll = () => {
+    for (const { line, xInSvg } of markers) {
+      const x = baseLeft - ganttContainer.scrollLeft + xInSvg;
+      line.style.transform = `translate(${x}px, ${baseTop + GANTT_HEADER_HEIGHT}px)`;
+    }
+  };
+
+  ganttContainer.addEventListener("scroll", syncAll, { passive: true });
+  syncAll();
+
+  milestoneLinesCleanup = () => {
+    ganttContainer.removeEventListener("scroll", syncAll);
+    for (const { line } of markers) line.remove();
+    milestoneLinesCleanup = null;
+  };
+}
+
 function renderChart(forceCenterToday = false) {
   if (stickyTimelineCleanup) {
     stickyTimelineCleanup();
@@ -1278,6 +1368,10 @@ function renderChart(forceCenterToday = false) {
 
   if (customTodayLineCleanup) {
     customTodayLineCleanup();
+  }
+
+  if (milestoneLinesCleanup) {
+    milestoneLinesCleanup();
   }
 
   applyChartInsets();
@@ -1327,6 +1421,7 @@ function renderChart(forceCenterToday = false) {
   createTaskSidebar();
   createStickyTimelineHeader();
   createCustomTodayLine();
+  createMilestoneLines();
   updateDependencyVisibility();
   updateZoomActive();
 }
