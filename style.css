@@ -400,7 +400,7 @@ body {
 
 .task-sidebar-header {
   position: relative;
-  height: 60px;
+  height: var(--gantt-sidebar-header-h, 60px);
   border-bottom: 1px solid rgba(16, 42, 67, 0.08);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 252, 0.94));
 }
@@ -470,7 +470,7 @@ body {
 
 .task-sidebar-body {
   position: relative;
-  height: calc(100% - 60px);
+  height: calc(100% - var(--gantt-sidebar-header-h, 60px));
   overflow: hidden;
 }
 
@@ -482,7 +482,8 @@ body {
   display: grid;
   grid-template-columns: 64px minmax(0, 2fr) minmax(0, 1.4fr) 74px 74px 52px;
   align-items: center;
-  min-height: 36px;
+  height: var(--gantt-row-height, 36px);
+  min-height: 16px;
   padding: 0 0.85rem;
   border-bottom: 1px solid rgba(16, 42, 67, 0.06);
   font-size: 0.84rem;
@@ -512,6 +513,14 @@ body {
 .task-sidebar-cell--date {
   font-family: "IBM Plex Mono", Menlo, Consolas, monospace;
   font-size: 0.76rem;
+}
+
+.task-sidebar-cell--date {
+  text-align: right;
+}
+
+.task-sidebar-cell--date input {
+  text-align: right;
 }
 
 .task-sidebar-cell--task {

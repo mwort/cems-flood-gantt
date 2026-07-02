@@ -1,28 +1,32 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+const _s = (typeof window !== "undefined" && window.GANTT_SETTINGS) || {};
+
 const model = {
   tasks: [],
   byId: new Map(),
   topoOrder: [],
   gantt: null,
   collapsedGroups: new Set(),
-  columnWidths: { id: 64, task: 240, assignee: 140, startDate: 74, endDate: 74, progress: 52 },
+  columnWidths: Object.assign(
+    { id: 64, task: 240, assignee: 140, startDate: 74, endDate: 74, progress: 52 },
+    _s.columnWidths
+  ),
   sidebarWidth: null
 };
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const GANTT_HEADER_HEIGHT = 60;
-const GANTT_ROW_HEIGHT = 36;
-const SIDEBAR_EXPANDED_WIDTH = 540;
-const SIDEBAR_COLLAPSED_WIDTH = 56;
+const GANTT_HEADER_HEIGHT = (Number.isFinite(Number(_s.ganttHeaderHeight)) ? Number(_s.ganttHeaderHeight) : 60);
+const GANTT_ROW_HEIGHT    = (Number.isFinite(Number(_s.ganttRowHeight))    ? Number(_s.ganttRowHeight)    : 36);
+const SIDEBAR_EXPANDED_WIDTH  = (Number.isFinite(Number(_s.sidebarExpandedWidth))  ? Number(_s.sidebarExpandedWidth)  : 540);
+const SIDEBAR_COLLAPSED_WIDTH = (Number.isFinite(Number(_s.sidebarCollapsedWidth)) ? Number(_s.sidebarCollapsedWidth) : 56);
 const MIN_GANTT_COLUMN_WIDTH = 18;
 const MAX_GANTT_COLUMN_WIDTH = 220;
 const GANTT_COLUMN_WIDTH_STEP = 2;
-const DEFAULT_GANTT_COLUMN_WIDTH_BY_MODE = {
-  Day: 38,
-  Week: 140,
-  Month: 120
-};
+const DEFAULT_GANTT_COLUMN_WIDTH_BY_MODE = Object.assign(
+  { Day: 38, Week: 140, Month: 120 },
+  _s.columnWidthByMode
+);
 
 
 const ganttContainer = document.getElementById("gantt");
@@ -35,9 +39,13 @@ const dependencyToggle = document.getElementById("dependency-toggle");
 const downloadJsonButton = document.getElementById("download-json");
 const loadJsonButton = document.getElementById("load-json");
 const refreshDataButton = document.getElementById("refresh-data");
+const resetLayoutButton = document.getElementById("reset-layout");
 const columnWidthMinusButton = document.getElementById("column-width-minus");
 const columnWidthPlusButton = document.getElementById("column-width-plus");
 const columnWidthValue = document.getElementById("column-width-value");
+const rowHeightMinusButton = document.getElementById("row-height-minus");
+const rowHeightPlusButton = document.getElementById("row-height-plus");
+const rowHeightValue = document.getElementById("row-height-value");
 const appTitleInput = document.getElementById("app-title");
 
 function getSettingsScriptElement() {
@@ -53,6 +61,24 @@ let interactionTrackingReady = false;
 let localFileLoaderReady = false;
 let dependencyControlsReady = false;
 let columnWidthControlsReady = false;
+let rowHeightControlsReady = false;
+const MIN_ROW_HEIGHT = 16;
+const MAX_ROW_HEIGHT = 80;
+const ROW_HEIGHT_STEP = 2;
+let currentRowHeight = (() => {
+  try {
+    const stored = Number(localStorage.getItem("ganttRowHeight"));
+    if (Number.isFinite(stored) && stored >= MIN_ROW_HEIGHT && stored <= MAX_ROW_HEIGHT) return stored;
+  } catch (e) { /* ignore */ }
+  return GANTT_ROW_HEIGHT;
+})();
+{
+  const _bh = Math.max(8, currentRowHeight - 12);
+  const _pad = Math.round((currentRowHeight - _bh) / 2);
+  document.documentElement.style.setProperty('--gantt-row-height', (_bh + _pad) + 'px');
+  // Grid rows start at Frappe internal header_height + padding/2.
+  document.documentElement.style.setProperty('--gantt-sidebar-header-h', (GANTT_HEADER_HEIGHT - 10 + _pad / 2) + 'px');
+}
 let dependencyHoverReady = false;
 let stickyTimelineCleanup = null;
 let taskSidebarCleanup = null;
@@ -160,10 +186,12 @@ function initializeApp(raw) {
   renderJson();
   setupZoomControls();
   setupColumnWidthControls();
+  setupRowHeightControls();
   setupDependencyControls();
   setupDownloadButton();
   setupLoadButton();
   setupRefreshButton();
+  setupResetLayoutButton();
   setupDependencyHoverTracking();
   hideRuntimeNotice();
 }
@@ -634,7 +662,7 @@ function buildVisibleTasks() {
       groupName
     });
     if (!collapsed) {
-      result.push(...group.tasks);
+      result.push(...group.tasks.slice().sort((a, b) => a.startMs - b.startMs));
     }
   }
   for (const task of model.tasks) {
@@ -825,6 +853,10 @@ function createTaskSidebar() {
   sidebar.style.width = `${getTaskSidebarWidth()}px`;
   sidebar.style.height = `${sidebarHeight}px`;
   sidebar.setAttribute("aria-label", "Task details sidebar");
+  // Offset the sidebar up by its top border so its inner content (header + rows)
+  // shares the chart's coordinate system and rows align with the chart grid rows.
+  // (Actual border width is read after the element is in the DOM.)
+  let sidebarTop = baseTop;
 
   const columns = taskSidebarCollapsed
     ? `<div class="task-sidebar-columns task-sidebar-columns--collapsed"><span>ID</span></div>`
@@ -851,6 +883,11 @@ function createTaskSidebar() {
 
   chartPanel.appendChild(sidebar);
 
+  // Now that the sidebar is in the DOM, account for its top border so the inner
+  // content coordinate system matches the chart grid.
+  const sidebarBorderTop = parseFloat(getComputedStyle(sidebar).borderTopWidth) || 0;
+  sidebarTop = baseTop - sidebarBorderTop;
+
   let boundaryResizer = null;
   if (!taskSidebarCollapsed) {
     boundaryResizer = document.createElement("div");
@@ -863,7 +900,7 @@ function createTaskSidebar() {
   const toggle = sidebar.querySelector(".task-sidebar-toggle");
   const columnsHeader = sidebar.querySelector(".task-sidebar-columns");
   const syncSidebar = () => {
-    sidebar.style.transform = `translate(${baseLeft}px, ${baseTop}px)`;
+    sidebar.style.transform = `translate(${baseLeft}px, ${sidebarTop}px)`;
     if (rows) {
       rows.style.transform = `translateY(${-ganttContainer.scrollTop}px)`;
     }
@@ -1076,8 +1113,16 @@ function createTaskSidebar() {
 
   syncSidebar();
 
+  const onSidebarWheel = (e) => {
+    ganttContainer.scrollTop += e.deltaY;
+    ganttContainer.scrollLeft += e.deltaX;
+    e.preventDefault();
+  };
+  sidebar.addEventListener("wheel", onSidebarWheel, { passive: false });
+
   taskSidebarCleanup = () => {
     ganttContainer.removeEventListener("scroll", syncSidebar);
+    sidebar.removeEventListener("wheel", onSidebarWheel);
     sidebar.remove();
     taskSidebarCleanup = null;
   };
@@ -1100,7 +1145,12 @@ function createStickyTimelineHeader() {
   }
 
   const width = Number(svg.getAttribute("width")) || svg.clientWidth;
-  const headerHeight = Number(gridHeader.getAttribute("height")) || GANTT_HEADER_HEIGHT;
+  // Use the first grid-row's Y (where row backgrounds start) so the sticky timeline
+  // bottom aligns with the sidebar header bottom and the chart's grid rows.
+  const firstGridRow = grid.querySelector(".grid-row");
+  const headerHeight = (firstGridRow ? Number(firstGridRow.getAttribute("y")) : 0)
+    || Number(gridHeader.getAttribute("height"))
+    || GANTT_HEADER_HEIGHT;
   if (!width || !headerHeight) {
     return;
   }
@@ -1124,6 +1174,7 @@ function createStickyTimelineHeader() {
   stickySvg.setAttribute("width", String(width));
   stickySvg.setAttribute("height", String(headerHeight));
   stickySvg.setAttribute("viewBox", `0 0 ${width} ${headerHeight}`);
+  stickySvg.style.overflow = "hidden";
 
   const stickyGrid = document.createElementNS(SVG_NS, "g");
   stickyGrid.classList.add("sticky-grid");
@@ -1288,7 +1339,8 @@ function createCustomTodayLine() {
 
   const marker = document.createElement("div");
   marker.className = "gantt-custom-today";
-  marker.style.height = `${Math.max(80, ganttContainer.clientHeight - paddingTop * 2 - GANTT_HEADER_HEIGHT)}px`;
+  const svgHeight = Number(svg.getAttribute("height")) || ganttContainer.scrollHeight;
+  marker.style.height = `${Math.max(80, svgHeight - GANTT_HEADER_HEIGHT)}px`;
   chartPanel.appendChild(marker);
 
   const syncMarker = () => {
@@ -1358,7 +1410,8 @@ function createMilestoneLines() {
   const ganttRect = ganttContainer.getBoundingClientRect();
   const baseLeft = ganttRect.left - panelRect.left + paddingLeft;
   const baseTop = ganttRect.top - panelRect.top + paddingTop;
-  const lineHeight = Math.max(80, ganttContainer.clientHeight - paddingTop * 2 - GANTT_HEADER_HEIGHT);
+  const svgHeight = Number(svg.getAttribute("height")) || ganttContainer.scrollHeight;
+  const lineHeight = Math.max(80, svgHeight - GANTT_HEADER_HEIGHT);
 
   const markers = milestones.map((task) => {
     const xInSvg = slope * task.endMs + intercept;
@@ -1420,8 +1473,8 @@ function renderChart(forceCenterToday = false) {
   const visibleTasks = buildVisibleTasks();
   model.gantt = new Gantt("#gantt", visibleTasks.map(toChartTask), {
     view_mode: currentViewMode,
-    bar_height: 24,
-    padding: 12,
+    bar_height: Math.max(8, currentRowHeight - 12),
+    padding: Math.round((currentRowHeight - Math.max(8, currentRowHeight - 12)) / 2),
     column_width: getActiveGanttColumnWidth(),
     date_format: "YYYY-MM-DD",
     custom_popup_html: (task) => {
@@ -1447,6 +1500,27 @@ function renderChart(forceCenterToday = false) {
 
   // Frappe 0.6.1 resets column_width from view_mode defaults internally.
   applyCustomGanttColumnWidth();
+
+  // Sync sidebar row height and header offset with actual Frappe layout.
+  {
+    const firstGridRow = model.gantt.$svg && model.gantt.$svg.querySelector('.grid-row');
+    const ganttRowH = firstGridRow ? Number(firstGridRow.getAttribute('height')) : null;
+    // Use the grid-row start Y (row backgrounds) so sidebar rows align with chart rows.
+    // Bars are inset within each row by padding/2, which is correct.
+    const ganttRowsY = firstGridRow ? Number(firstGridRow.getAttribute('y')) : null;
+    if (ganttRowH) document.documentElement.style.setProperty('--gantt-row-height', ganttRowH + 'px');
+    if (ganttRowsY !== null) document.documentElement.style.setProperty('--gantt-sidebar-header-h', ganttRowsY + 'px');
+
+    // Frappe 0.6.1 draws the .grid-header background rect as header_height + 10,
+    // which extends past where the first bar starts (header_height + padding).
+    // Shrink it to the grid-row start Y so the first bar never sits behind it.
+    if (ganttRowsY !== null) {
+      const gridHeaderRect = model.gantt.$svg.querySelector('.grid-header');
+      if (gridHeaderRect) {
+        gridHeaderRect.setAttribute('height', String(ganttRowsY));
+      }
+    }
+  }
 
   // Restore scroll position after render
   ganttContainer.scrollLeft = scrollLeft;
@@ -1476,6 +1550,56 @@ function setupZoomControls() {
     }
   });
   updateZoomActive();
+}
+
+function setupRowHeightControls() {
+  if (rowHeightControlsReady) {
+    updateRowHeightControlState();
+    return;
+  }
+
+  if (rowHeightMinusButton) {
+    rowHeightMinusButton.addEventListener("click", () => {
+      currentRowHeight = Math.max(MIN_ROW_HEIGHT, currentRowHeight - ROW_HEIGHT_STEP);
+      saveRowHeight();
+      updateRowHeightControlState();
+      renderChart();
+    });
+  }
+
+  if (rowHeightPlusButton) {
+    rowHeightPlusButton.addEventListener("click", () => {
+      currentRowHeight = Math.min(MAX_ROW_HEIGHT, currentRowHeight + ROW_HEIGHT_STEP);
+      saveRowHeight();
+      updateRowHeightControlState();
+      renderChart();
+    });
+  }
+
+  rowHeightControlsReady = true;
+  updateRowHeightControlState();
+}
+
+function updateRowHeightControlState() {
+  const _bh = Math.max(8, currentRowHeight - 12);
+  const _pad = Math.round((currentRowHeight - _bh) / 2);
+  document.documentElement.style.setProperty('--gantt-row-height', (_bh + _pad) + 'px');
+  document.documentElement.style.setProperty('--gantt-sidebar-header-h', (GANTT_HEADER_HEIGHT - 10 + _pad / 2) + 'px');
+  if (rowHeightValue) {
+    rowHeightValue.textContent = `Row: ${currentRowHeight}px`;
+  }
+  if (rowHeightMinusButton) {
+    rowHeightMinusButton.disabled = currentRowHeight <= MIN_ROW_HEIGHT;
+  }
+  if (rowHeightPlusButton) {
+    rowHeightPlusButton.disabled = currentRowHeight >= MAX_ROW_HEIGHT;
+  }
+}
+
+function saveRowHeight() {
+  try {
+    localStorage.setItem("ganttRowHeight", String(currentRowHeight));
+  } catch (e) { /* localStorage not available */ }
 }
 
 function setupColumnWidthControls() {
@@ -1699,6 +1823,43 @@ function setupRefreshButton() {
 
   refreshDataButton.dataset.ready = "true";
   refreshDataButton.disabled = !hasUnsavedEdits;
+}
+
+function setupResetLayoutButton() {
+  if (!resetLayoutButton || resetLayoutButton.dataset.ready === "true") {
+    return;
+  }
+
+  resetLayoutButton.addEventListener("click", () => {
+    try {
+      localStorage.removeItem("ganttColumnWidths");
+      localStorage.removeItem("ganttSidebarWidth");
+      localStorage.removeItem("ganttChartColumnWidth");
+      localStorage.removeItem("ganttRowHeight");
+    } catch (e) {
+      // localStorage not available
+    }
+
+    // Re-apply settings.js defaults.
+    const s = window.GANTT_SETTINGS || {};
+    model.columnWidths = Object.assign(
+      { id: 64, task: 240, assignee: 140, startDate: 74, endDate: 74, progress: 52 },
+      s.columnWidths
+    );
+    model.sidebarWidth = null;
+    currentRowHeight = Number.isFinite(Number(s.ganttRowHeight)) ? Number(s.ganttRowHeight) : GANTT_ROW_HEIGHT;
+    updateRowHeightControlState();
+
+    const modeDefaults = Object.assign({ Day: 38, Week: 140, Month: 120 }, s.columnWidthByMode);
+    ganttColumnWidthByMode.Day   = clampGanttColumnWidth(modeDefaults.Day);
+    ganttColumnWidthByMode.Week  = clampGanttColumnWidth(modeDefaults.Week);
+    ganttColumnWidthByMode.Month = clampGanttColumnWidth(modeDefaults.Month);
+
+    renderChart();
+    updateColumnWidthControlState();
+  });
+
+  resetLayoutButton.dataset.ready = "true";
 }
 
 function todayStamp() {
