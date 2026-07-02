@@ -58,6 +58,14 @@ let stickyTimelineCleanup = null;
 let taskSidebarCleanup = null;
 let customTodayLineCleanup = null;
 let milestoneLinesCleanup = null;
+let hasUnsavedEdits = false;
+
+function setUnsavedEdits(value) {
+  hasUnsavedEdits = value;
+  if (refreshDataButton && refreshDataButton.dataset.ready === "true") {
+    refreshDataButton.disabled = !value;
+  }
+}
 let taskSidebarCollapsed = false;
 let hasAutoCenteredOnToday = false;
 let sidebarResizeCleanup = null;
@@ -72,51 +80,77 @@ async function bootstrap() {
   setupLoadButton();
   setupRefreshButton();
 
-  const dataUrl = getConfiguredDataUrl();
-
-  // Prefer the local working copy so edits survive a reload.
-  const cached = loadCachedTaskData();
-  if (cached) {
-    try {
-      initializeApp(cached);
-      return;
-    } catch (cacheError) {
-      // fall through to remote / local file / picker if the cache is unusable
-    }
+  if (getConfiguredDataUrl()) {
+    window.addEventListener("beforeunload", (e) => {
+      if (hasUnsavedEdits) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    });
   }
 
+  const dataUrl = getConfiguredDataUrl();
+
   if (dataUrl) {
+    // When a remote URL is configured, always fetch it first so the hosted
+    // page is always up-to-date. Fall back to cache only if the fetch fails
+    // (e.g. offline).
     try {
       const raw = await loadTaskJsonFromUrl(dataUrl);
       initializeApp(raw);
       return;
     } catch (remoteError) {
-      // fall through to local data.json / picker
+      const cached = loadCachedTaskData();
+      if (cached) {
+        try {
+          initializeApp(cached);
+          return;
+        } catch (cacheError) {
+          // fall through to picker
+        }
+      }
+    }
+  } else {
+    // No remote URL: prefer the local working copy so edits survive a reload
+    // (file:// workflow).
+    const cached = loadCachedTaskData();
+    if (cached) {
+      try {
+        initializeApp(cached);
+        return;
+      } catch (cacheError) {
+        // fall through to local data.json / picker
+      }
+    }
+
+    try {
+      const raw = await loadTaskJson();
+      initializeApp(raw);
+      return;
+    } catch (error) {
+      // fall through to picker
     }
   }
 
-  try {
-    const raw = await loadTaskJson();
-    initializeApp(raw);
-  } catch (error) {
-    const message = [
-      dataUrl
-        ? "Could not load task data from the configured URL or ./data.json."
-        : "Could not load ./data.json automatically.",
-      "Set dataUrl in settings.js, or choose a file with the picker below.",
-      error.message
-    ].join("\n");
-
-    showRuntimeNotice(message);
-    if (jsonOutput) {
-      jsonOutput.textContent = message;
-    }
+  const message = [
+    dataUrl
+      ? "Could not load task data from the configured URL."
+      : "Could not load ./data.json automatically.",
+    "Set dataUrl in settings.js, or choose a file with the picker below."
+  ].join("\n");
+  showRuntimeNotice(message);
+  if (jsonOutput) {
+    jsonOutput.textContent = message;
   }
 }
 
 function initializeApp(raw) {
   currentViewMode = "Month";
   hasAutoCenteredOnToday = false;
+  hasUnsavedEdits = false;
+  if (refreshDataButton && refreshDataButton.dataset.ready === "true") {
+    refreshDataButton.disabled = true;
+  }
   model.tasks = normalizeTasks(raw);
   model.topoOrder = topologicalSort(model.tasks);
   scheduleInitialDates(model.tasks, model.topoOrder);
@@ -883,6 +917,7 @@ function createTaskSidebar() {
       task.name = String(input.value || task.id).trim() || task.id;
       renderChart();
       renderJson();
+      markUnsavedEdits();
       return;
     }
 
@@ -891,6 +926,7 @@ function createTaskSidebar() {
       task.assignee = assignee || null;
       renderChart();
       renderJson();
+      markUnsavedEdits();
       return;
     }
 
@@ -898,6 +934,7 @@ function createTaskSidebar() {
       task.progress = normalizeProgress(input.value);
       renderChart();
       renderJson();
+      markUnsavedEdits();
       return;
     }
 
@@ -1639,6 +1676,10 @@ function setupRefreshButton() {
 
       // Wipe the local working copy so the reload uses the freshly fetched URL data.
       try { localStorage.removeItem("ganttDataCache"); } catch (e) { /* ignore */ }
+      hasUnsavedEdits = false;
+      if (refreshDataButton && refreshDataButton.dataset.ready === "true") {
+        refreshDataButton.disabled = true;
+      }
 
       const dataUrl = getConfiguredDataUrl();
       if (!dataUrl) {
@@ -1651,12 +1692,13 @@ function setupRefreshButton() {
     } catch (error) {
       showRuntimeNotice(["Could not refresh from the configured URL.", error.message].join("\n"));
     } finally {
-      refreshDataButton.disabled = false;
+      refreshDataButton.disabled = !hasUnsavedEdits;
       refreshDataButton.textContent = originalLabel;
     }
   });
 
   refreshDataButton.dataset.ready = "true";
+  refreshDataButton.disabled = !hasUnsavedEdits;
 }
 
 function todayStamp() {
@@ -1867,6 +1909,15 @@ function handleDateChange(taskId, newStartMs, newEndMs) {
   enforceForwardConstraints();
   renderChart();
   renderJson();
+  markUnsavedEdits();
+}
+
+function markUnsavedEdits() {
+  if (!getConfiguredDataUrl()) return;
+  hasUnsavedEdits = true;
+  if (refreshDataButton && refreshDataButton.dataset.ready === "true") {
+    refreshDataButton.disabled = false;
+  }
 }
 
 function classifyEdit(oldStart, oldEnd, nextStart, nextEnd) {
