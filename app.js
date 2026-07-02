@@ -48,6 +48,23 @@ const rowHeightPlusButton = document.getElementById("row-height-plus");
 const rowHeightValue = document.getElementById("row-height-value");
 const appTitleInput = document.getElementById("app-title");
 
+const taskModal = document.getElementById("task-modal");
+const tmTitle = document.getElementById("tm-title");
+const tmId = document.getElementById("tm-id");
+const tmGroup = document.getElementById("tm-group");
+const tmAssignee = document.getElementById("tm-assignee");
+const tmProgress = document.getElementById("tm-progress");
+const tmStart = document.getElementById("tm-start");
+const tmEnd = document.getElementById("tm-end");
+const tmDuration = document.getElementById("tm-duration");
+const tmMilestone = document.getElementById("tm-milestone");
+const tmDeps = document.getElementById("tm-deps");
+const tmBlocking = document.getElementById("tm-blocking");
+const tmDescription = document.getElementById("tm-description");
+const tmSaveButton = document.getElementById("tm-save");
+const tmDeleteButton = document.getElementById("tm-delete");
+let modalTaskId = null;
+
 function getSettingsScriptElement() {
   return document.getElementById("gantt-settings-script");
 }
@@ -193,6 +210,7 @@ function initializeApp(raw) {
   setupRefreshButton();
   setupResetLayoutButton();
   setupDependencyHoverTracking();
+  setupTaskModal();
   hideRuntimeNotice();
 }
 
@@ -1538,21 +1556,7 @@ function renderChart(forceCenterToday = false) {
     padding: Math.round((currentRowHeight - Math.max(8, currentRowHeight - 12)) / 2),
     column_width: getActiveGanttColumnWidth(),
     date_format: "YYYY-MM-DD",
-    custom_popup_html: (task) => {
-      if (task.id.startsWith("__group__")) return "<div></div>";
-      const internal = model.byId.get(task.id);
-      return [
-        `<div class=\"details-container\">`,
-        `<h5>${internal.name}</h5>`,
-        `<p><strong>Assignee:</strong> ${internal.assignee || "unassigned"}</p>`,
-        `<p><strong>Duration:</strong> ${internal.durationDays} days</p>`,
-        `<p><strong>Progress:</strong> ${internal.progress}%</p>`,
-        `<p><strong>Dependencies:</strong> ${internal.dependencies.join(", ") || "none"}</p>`,
-        `<p><strong>Blocks:</strong> ${internal.blocking.join(", ") || "none"}</p>`,
-        internal.description ? `<p>${internal.description}</p>` : "",
-        `</div>`
-      ].join("");
-    },
+    custom_popup_html: () => "<div></div>",
     on_date_change: (task, start, end) => {
       if (task.id.startsWith("__group__")) return;
       handleDateChange(task.id, dateToMs(start), dateToMs(end));
@@ -1596,6 +1600,182 @@ function renderChart(forceCenterToday = false) {
   createMilestoneLines();
   updateDependencyVisibility();
   updateZoomActive();
+  setupBarClick();
+}
+
+function setupBarClick() {
+  const svg = model.gantt && model.gantt.$svg;
+  if (!svg) return;
+
+  let downX = 0;
+  let downY = 0;
+  let moved = false;
+
+  svg.addEventListener("mousedown", (e) => {
+    if (!e.target.closest(".bar-wrapper")) return;
+    downX = e.clientX;
+    downY = e.clientY;
+    moved = false;
+  });
+
+  svg.addEventListener("mousemove", (e) => {
+    if (Math.abs(e.clientX - downX) > 4 || Math.abs(e.clientY - downY) > 4) {
+      moved = true;
+    }
+  });
+
+  svg.addEventListener("click", (e) => {
+    const wrapper = e.target.closest(".bar-wrapper");
+    if (!wrapper || moved) return;
+    const id = wrapper.getAttribute("data-id");
+    if (!id || id.startsWith("__group__")) return;
+    openTaskModal(id);
+  });
+}
+
+function openTaskModal(id) {
+  const task = model.byId.get(id);
+  if (!task || !taskModal) return;
+
+  modalTaskId = id;
+  tmTitle.value = task.name || "";
+  tmId.value = task.sourceId || task.id;
+  tmGroup.value = task.group || "";
+  tmAssignee.value = task.assignee || "";
+  tmProgress.value = task.progress != null ? task.progress : 0;
+  tmStart.value = Number.isFinite(task.startMs) ? msToDateString(task.startMs) : "";
+  tmEnd.value = Number.isFinite(task.endMs) ? msToDateString(task.endMs) : "";
+  tmDuration.value = task.durationDays != null ? task.durationDays : "";
+  tmMilestone.checked = task.milestone === true;
+  tmDeps.value = (task.dependencies || []).join(", ");
+  tmBlocking.value = (task.blocking || []).join(", ");
+  tmDescription.value = task.description || "";
+
+  taskModal.hidden = false;
+  requestAnimationFrame(() => tmTitle.focus());
+}
+
+function closeTaskModal() {
+  if (!taskModal) return;
+  taskModal.hidden = true;
+  modalTaskId = null;
+}
+
+function saveTaskModal() {
+  if (!modalTaskId) return;
+  const task = model.byId.get(modalTaskId);
+  if (!task) {
+    closeTaskModal();
+    return;
+  }
+
+  task.name = (tmTitle.value || "").trim() || task.id;
+  task.group = (tmGroup.value || "").trim() || null;
+  task.assignee = (tmAssignee.value || "").trim() || null;
+  task.description = (tmDescription.value || "").trim() || null;
+  task.progress = normalizeProgress(tmProgress.value);
+  task.milestone = tmMilestone.checked === true;
+
+  // Dates + duration. End date wins if it changed; otherwise use duration.
+  const startMs = normalizeTimestamp(tmStart.value);
+  const origEndMs = task.endMs;
+  let endMs = normalizeTimestamp(tmEnd.value);
+  const durVal = Number(tmDuration.value);
+  if (Number.isFinite(startMs) && startMs > 0) {
+    const endChanged = Number.isFinite(endMs) && endMs > 0 && endMs !== origEndMs;
+    if (!endChanged && Number.isFinite(durVal) && durVal >= 1) {
+      endMs = startMs + Math.round(durVal) * DAY_MS;
+    }
+    if (!Number.isFinite(endMs) || endMs <= startMs) {
+      endMs = startMs + DAY_MS;
+    }
+    task.startMs = startMs;
+    task.durationDays = Math.max(1, Math.round((endMs - startMs) / DAY_MS));
+    task.endMs = startMs + task.durationDays * DAY_MS;
+  }
+
+  // Dependencies + blocking: keep only existing IDs, exclude self.
+  const validIds = new Set(model.tasks.map((t) => t.id));
+  const parseIds = (value) =>
+    String(value || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s && s !== task.id && validIds.has(s));
+
+  const prevDeps = task.dependencies;
+  const newDeps = parseIds(tmDeps.value);
+  task.dependencies = newDeps;
+  try {
+    topologicalSort(model.tasks);
+  } catch (err) {
+    task.dependencies = prevDeps;
+    if (typeof showRuntimeNotice === "function") {
+      showRuntimeNotice(`Dependencies not changed: ${err.message}`);
+    }
+  }
+  task.blocking = parseIds(tmBlocking.value);
+
+  reindex();
+  renderChart();
+  renderJson();
+  markUnsavedEdits();
+  closeTaskModal();
+}
+
+function deleteTaskById(id) {
+  const index = model.tasks.findIndex((t) => t.id === id);
+  if (index === -1) return;
+
+  model.tasks.splice(index, 1);
+  for (const t of model.tasks) {
+    if (Array.isArray(t.dependencies)) {
+      t.dependencies = t.dependencies.filter((d) => d !== id);
+    }
+    if (Array.isArray(t.blocking)) {
+      t.blocking = t.blocking.filter((b) => b !== id);
+    }
+  }
+
+  reindex();
+  renderChart();
+  renderJson();
+  markUnsavedEdits();
+}
+
+function setupTaskModal() {
+  if (!taskModal) return;
+
+  taskModal.addEventListener("click", (e) => {
+    if (e.target.closest("[data-modal-close]")) {
+      closeTaskModal();
+    }
+  });
+
+  if (tmSaveButton) {
+    tmSaveButton.addEventListener("click", saveTaskModal);
+  }
+
+  if (tmDeleteButton) {
+    tmDeleteButton.addEventListener("click", () => {
+      if (!modalTaskId) return;
+      const task = model.byId.get(modalTaskId);
+      const label = task ? task.name || task.id : "this task";
+      if (window.confirm(`Delete "${label}"? This cannot be undone.`)) {
+        deleteTaskById(modalTaskId);
+        closeTaskModal();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (taskModal.hidden) return;
+    if (e.key === "Escape") {
+      closeTaskModal();
+    } else if (e.key === "Enter" && e.target && e.target.tagName !== "TEXTAREA") {
+      e.preventDefault();
+      saveTaskModal();
+    }
+  });
 }
 
 function setupZoomControls() {

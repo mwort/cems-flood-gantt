@@ -61,6 +61,72 @@
     </section>
   </main>
 
+  <div id="task-modal" class="task-modal" hidden>
+    <div class="task-modal-backdrop" data-modal-close></div>
+    <div class="task-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
+      <header class="task-modal-header">
+        <h2 id="task-modal-title">Edit Task</h2>
+        <button type="button" class="task-modal-close" data-modal-close aria-label="Close">×</button>
+      </header>
+      <div class="task-modal-body">
+        <div class="task-modal-field task-modal-field--full">
+          <label for="tm-title">Title</label>
+          <input id="tm-title" type="text" spellcheck="false" />
+        </div>
+        <div class="task-modal-field">
+          <label for="tm-id">ID</label>
+          <input id="tm-id" type="text" readonly />
+        </div>
+        <div class="task-modal-field">
+          <label for="tm-group">Group</label>
+          <input id="tm-group" type="text" spellcheck="false" />
+        </div>
+        <div class="task-modal-field">
+          <label for="tm-assignee">Assignee</label>
+          <input id="tm-assignee" type="text" spellcheck="false" />
+        </div>
+        <div class="task-modal-field">
+          <label for="tm-progress">Progress (%)</label>
+          <input id="tm-progress" type="number" min="0" max="100" step="1" />
+        </div>
+        <div class="task-modal-field">
+          <label for="tm-start">Start</label>
+          <input id="tm-start" type="date" />
+        </div>
+        <div class="task-modal-field">
+          <label for="tm-end">End</label>
+          <input id="tm-end" type="date" />
+        </div>
+        <div class="task-modal-field">
+          <label for="tm-duration">Duration (days)</label>
+          <input id="tm-duration" type="number" min="1" step="1" />
+        </div>
+        <div class="task-modal-field task-modal-field--check">
+          <label for="tm-milestone"><input id="tm-milestone" type="checkbox" /> Milestone</label>
+        </div>
+        <div class="task-modal-field task-modal-field--full">
+          <label for="tm-deps">Blocked by (task IDs, comma-separated)</label>
+          <input id="tm-deps" type="text" spellcheck="false" />
+        </div>
+        <div class="task-modal-field task-modal-field--full">
+          <label for="tm-blocking">Blocking (task IDs, comma-separated)</label>
+          <input id="tm-blocking" type="text" spellcheck="false" />
+        </div>
+        <div class="task-modal-field task-modal-field--full">
+          <label for="tm-description">Description</label>
+          <textarea id="tm-description" rows="3" spellcheck="false"></textarea>
+        </div>
+      </div>
+      <footer class="task-modal-footer">
+        <button type="button" class="task-modal-delete" id="tm-delete">Delete task</button>
+        <div class="task-modal-actions">
+          <button type="button" class="task-modal-cancel" data-modal-close>Cancel</button>
+          <button type="button" class="task-modal-save" id="tm-save">Save</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
   <script id="gantt-settings-script" src="./settings.js"></script>
   <script src="./app.js"></script>
