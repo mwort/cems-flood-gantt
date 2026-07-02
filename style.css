@@ -620,6 +620,34 @@ body {
   letter-spacing: 0.03em;
 }
 
+.task-sidebar-rows .task-sidebar-row--group .task-sidebar-cell--progress {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.group-add-task {
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.group-add-task:hover {
+  background: rgba(255, 255, 255, 0.32);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
 .data-panel {
   padding: 0.9rem 1rem;
   animation: rise 920ms ease-out both;

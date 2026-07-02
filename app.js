@@ -671,6 +671,60 @@ function buildVisibleTasks() {
   return result;
 }
 
+function generateNewTaskId() {
+  let maxNum = 0;
+  let hasNumeric = false;
+  for (const t of model.tasks) {
+    const n = Number(t.sourceId);
+    if (Number.isFinite(n) && String(n) === String(t.sourceId)) {
+      hasNumeric = true;
+      if (n > maxNum) maxNum = n;
+    }
+  }
+  if (hasNumeric) {
+    return maxNum + 1;
+  }
+  const existing = new Set(model.tasks.map((t) => String(t.id)));
+  let i = 1;
+  while (existing.has(`task-${i}`)) i++;
+  return `task-${i}`;
+}
+
+function addTaskToGroup(groupName) {
+  const group = buildGroups().get(groupName);
+  const startMs = group && Number.isFinite(group.startMs) && group.startMs !== Infinity
+    ? group.startMs
+    : floorToDay(new Date()).getTime();
+  const durationDays = 7;
+  const sourceId = generateNewTaskId();
+  const id = String(sourceId);
+
+  model.tasks.push({
+    id,
+    sourceId,
+    name: "New task",
+    description: null,
+    assignee: null,
+    durationDays,
+    dependencies: [],
+    blocking: [],
+    progress: 0,
+    group: groupName,
+    milestone: false,
+    dependents: [],
+    startMs,
+    endMs: startMs + durationDays * DAY_MS
+  });
+
+  // Make sure the group is expanded so the new task is visible.
+  model.collapsedGroups.delete(groupName);
+
+  reindex();
+  renderChart();
+  renderJson();
+  markUnsavedEdits();
+}
+
 function floorToDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -800,7 +854,7 @@ function renderGroupHeaderSidebarRow(task) {
     `<div class="task-sidebar-cell task-sidebar-cell--assignee"></div>`,
     `<div class="task-sidebar-cell task-sidebar-cell--date">${formatSidebarDate(task.startMs)}</div>`,
     `<div class="task-sidebar-cell task-sidebar-cell--date">${formatSidebarDate(task.endMs)}</div>`,
-    `<div class="task-sidebar-cell task-sidebar-cell--progress"></div>`,
+    `<div class="task-sidebar-cell task-sidebar-cell--progress"><button class="group-add-task" type="button" title="Add task to ${task.groupName}" aria-label="Add task to ${task.groupName}" data-add-group="${task.groupName}">+</button></div>`,
     `</div>`
   ].join("");
 }
@@ -913,6 +967,13 @@ function createTaskSidebar() {
   });
 
   sidebar.addEventListener("click", (e) => {
+    const addBtn = e.target.closest(".group-add-task[data-add-group]");
+    if (addBtn) {
+      e.stopPropagation();
+      addTaskToGroup(addBtn.dataset.addGroup);
+      return;
+    }
+
     const groupRow = e.target.closest(".task-sidebar-row--group[data-group]");
     if (!groupRow) return;
     const groupName = groupRow.dataset.group;
