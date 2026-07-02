@@ -151,6 +151,42 @@
   font-size: 1.2rem;
 }
 
+.runtime-notice-close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.95rem;
+  border: none;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  border-radius: 8px;
+}
+
+.runtime-notice-close:hover {
+  background: rgba(16, 42, 67, 0.08);
+  color: var(--ink);
+}
+
+.runtime-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.runtime-notice .file-picker--ghost {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.runtime-notice .file-picker--ghost:hover {
+  background: rgba(16, 42, 67, 0.06);
+}
+
 #runtime-message {
   margin: 0;
   color: var(--ink-soft);
@@ -726,6 +762,47 @@ body {
 /* Hide Frappe's built-in popup; we use a custom modal instead. */
 .gantt-container .popup-wrapper {
   display: none !important;
+}
+
+/* Empty-chart state */
+.gantt-empty-state {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--task-sidebar-width, 0px) + (100% - var(--task-sidebar-width, 0px)) / 2);
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1.6rem 2rem;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.gantt-empty-state-message {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 1rem;
+}
+
+.gantt-empty-state-add {
+  border: none;
+  border-radius: 999px;
+  padding: 0.7rem 1.4rem;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.gantt-empty-state-add:hover {
+  filter: brightness(1.05);
 }
 
 /* Task edit modal */

@@ -34,10 +34,13 @@ const jsonOutput = document.getElementById("task-json");
 const runtimeNotice = document.getElementById("runtime-notice");
 const runtimeMessage = document.getElementById("runtime-message");
 const localDataFileInput = document.getElementById("local-data-file");
+const createEmptyChartButton = document.getElementById("create-empty-chart");
+const runtimeNoticeCloseButton = document.getElementById("runtime-notice-close");
 const zoomControls = document.querySelector('.zoom-controls');
 const dependencyToggle = document.getElementById("dependency-toggle");
 const downloadJsonButton = document.getElementById("download-json");
 const loadJsonButton = document.getElementById("load-json");
+const addTaskButton = document.getElementById("add-task");
 const refreshDataButton = document.getElementById("refresh-data");
 const resetLayoutButton = document.getElementById("reset-layout");
 const columnWidthMinusButton = document.getElementById("column-width-minus");
@@ -121,6 +124,7 @@ async function bootstrap() {
   setupTitleBar();
   setupLocalFileLoader();
   setupLoadButton();
+  setupLoadDataDialog();
   setupRefreshButton();
 
   if (getConfiguredDataUrl()) {
@@ -211,6 +215,7 @@ function initializeApp(raw) {
   setupResetLayoutButton();
   setupDependencyHoverTracking();
   setupTaskModal();
+  setupAddTaskButton();
   hideRuntimeNotice();
 }
 
@@ -741,6 +746,48 @@ function addTaskToGroup(groupName) {
   renderChart();
   renderJson();
   markUnsavedEdits();
+}
+
+function addNewTask() {
+  const startMs = floorToDay(new Date()).getTime();
+  const durationDays = 7;
+  const sourceId = generateNewTaskId();
+  const id = String(sourceId);
+
+  model.tasks.push({
+    id,
+    sourceId,
+    name: "New task",
+    description: null,
+    assignee: null,
+    durationDays,
+    dependencies: [],
+    blocking: [],
+    progress: 0,
+    group: null,
+    milestone: false,
+    dependents: [],
+    startMs,
+    endMs: startMs + durationDays * DAY_MS
+  });
+
+  reindex();
+  renderChart();
+  renderJson();
+  markUnsavedEdits();
+  openTaskModal(id);
+}
+
+function setupAddTaskButton() {
+  if (!addTaskButton || addTaskButton.dataset.ready === "true") {
+    return;
+  }
+  addTaskButton.addEventListener("click", () => {
+    const settingsDrawer = document.querySelector(".settings-drawer");
+    if (settingsDrawer) settingsDrawer.open = false;
+    addNewTask();
+  });
+  addTaskButton.dataset.ready = "true";
 }
 
 function floorToDay(date) {
@@ -1550,7 +1597,18 @@ function renderChart(forceCenterToday = false) {
   const scrollTop = ganttContainer.scrollTop;
   ganttContainer.innerHTML = "";
   const visibleTasks = buildVisibleTasks();
-  model.gantt = new Gantt("#gantt", visibleTasks.map(toChartTask), {
+  const isEmptyChart = visibleTasks.length === 0;
+  const todayMs = floorToDay(new Date()).getTime();
+  const chartTasks = isEmptyChart
+    ? [{
+        id: "__placeholder__",
+        name: "",
+        start: msToDateString(todayMs),
+        end: msToDateString(todayMs + 7 * DAY_MS),
+        progress: 0
+      }]
+    : visibleTasks.map(toChartTask);
+  model.gantt = new Gantt("#gantt", chartTasks, {
     view_mode: currentViewMode,
     bar_height: Math.max(8, currentRowHeight - 12),
     padding: Math.round((currentRowHeight - Math.max(8, currentRowHeight - 12)) / 2),
@@ -1558,10 +1616,16 @@ function renderChart(forceCenterToday = false) {
     date_format: "YYYY-MM-DD",
     custom_popup_html: () => "<div></div>",
     on_date_change: (task, start, end) => {
-      if (task.id.startsWith("__group__")) return;
+      if (task.id.startsWith("__group__") || task.id === "__placeholder__") return;
       handleDateChange(task.id, dateToMs(start), dateToMs(end));
     }
   });
+
+  // An empty chart still needs a valid Frappe render; hide the placeholder row.
+  if (isEmptyChart && model.gantt.$svg) {
+    const placeholder = model.gantt.$svg.querySelector('.bar-wrapper[data-id="__placeholder__"]');
+    if (placeholder) placeholder.style.display = "none";
+  }
 
   // Frappe 0.6.1 resets column_width from view_mode defaults internally.
   applyCustomGanttColumnWidth();
@@ -1601,6 +1665,33 @@ function renderChart(forceCenterToday = false) {
   updateDependencyVisibility();
   updateZoomActive();
   setupBarClick();
+  renderEmptyState(isEmptyChart);
+}
+
+function renderEmptyState(isEmptyChart) {
+  const chartPanel = ganttContainer.closest(".chart-panel") || ganttContainer.parentElement;
+  if (!chartPanel) return;
+
+  const existing = chartPanel.querySelector(".gantt-empty-state");
+  if (existing) existing.remove();
+
+  if (!isEmptyChart) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "gantt-empty-state";
+
+  const message = document.createElement("p");
+  message.className = "gantt-empty-state-message";
+  message.textContent = "This chart is empty.";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "gantt-empty-state-add";
+  button.textContent = "Add your first task";
+  button.addEventListener("click", () => addNewTask());
+
+  overlay.append(message, button);
+  chartPanel.appendChild(overlay);
 }
 
 function setupBarClick() {
@@ -2010,12 +2101,37 @@ function setupLoadButton() {
   setupLocalFileLoader();
 
   loadJsonButton.addEventListener("click", () => {
-    if (localDataFileInput) {
-      localDataFileInput.click();
-    }
+    openLoadDataDialog();
   });
 
   loadJsonButton.dataset.ready = "true";
+}
+
+function openLoadDataDialog() {
+  const settingsDrawer = document.querySelector(".settings-drawer");
+  if (settingsDrawer) {
+    settingsDrawer.open = false;
+  }
+  showRuntimeNotice("Choose a data.json file to load, or create a new empty chart.");
+}
+
+function setupLoadDataDialog() {
+  setupLocalFileLoader();
+
+  if (runtimeNoticeCloseButton && runtimeNoticeCloseButton.dataset.ready !== "true") {
+    runtimeNoticeCloseButton.addEventListener("click", () => {
+      hideRuntimeNotice();
+    });
+    runtimeNoticeCloseButton.dataset.ready = "true";
+  }
+
+  if (createEmptyChartButton && createEmptyChartButton.dataset.ready !== "true") {
+    createEmptyChartButton.addEventListener("click", () => {
+      cacheTaskData("[]");
+      initializeApp([]);
+    });
+    createEmptyChartButton.dataset.ready = "true";
+  }
 }
 
 function setupRefreshButton() {

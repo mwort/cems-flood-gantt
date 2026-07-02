@@ -20,9 +20,13 @@
 
   <main class="layout">
     <section class="runtime-notice" id="runtime-notice" hidden>
+      <button id="runtime-notice-close" class="runtime-notice-close" type="button" aria-label="Close">×</button>
       <h2>Load Task Data</h2>
       <p id="runtime-message"></p>
-      <label class="file-picker" for="local-data-file">Choose data.json</label>
+      <div class="runtime-notice-actions">
+        <label class="file-picker" for="local-data-file">Choose data.json</label>
+        <button id="create-empty-chart" class="file-picker file-picker--ghost" type="button">Create empty chart</button>
+      </div>
       <input id="local-data-file" type="file" accept=".json,application/json,.ndjson,text/plain" />
       <p class="runtime-hint">When this page is opened with <span>file://</span>, browsers block automatic reads from nearby files. A local server still works best, but you can also pick data.json here.</p>
     </section>
@@ -46,6 +50,7 @@
         <button id="dependency-toggle" type="button">Deps: All</button>
         <button id="refresh-data" type="button">Refresh from URL</button>
         <button id="reset-layout" type="button">Reset Layout</button>
+        <button id="add-task" type="button">Add task</button>
         <button id="load-json" type="button">Load JSON</button>
         <button id="download-json" type="button">Download JSON</button>
       </div>
