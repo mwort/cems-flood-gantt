@@ -2467,10 +2467,11 @@ function buildOutputPayload() {
     Blocking: task.blocking.map((id) => normalizeOutputId(id)),
     "Blocked by": task.dependencies.map((id) => normalizeOutputId(id)),
     progress: task.progress,
-    start: task.startMs,
-    end: task.endMs,
+    start: msToDateString(task.startMs),
+    end: msToDateString(task.endMs),
     time: task.durationDays,
-    group: task.group ?? null
+    group: task.group ?? null,
+    milestone: task.milestone === true
   }));
 }
 
