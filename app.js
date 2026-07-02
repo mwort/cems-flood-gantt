@@ -2459,20 +2459,28 @@ function renderJson() {
 }
 
 function buildOutputPayload() {
-  return model.tasks.map((task) => ({
-    ID: task.sourceId,
-    Title: task.name,
-    Description: task.description,
-    Assignee: task.assignee,
-    Blocking: task.blocking.map((id) => normalizeOutputId(id)),
-    "Blocked by": task.dependencies.map((id) => normalizeOutputId(id)),
-    progress: task.progress,
-    start: msToDateString(task.startMs),
-    end: msToDateString(task.endMs),
-    time: task.durationDays,
-    group: task.group ?? null,
-    milestone: task.milestone === true
-  }));
+  return model.tasks.map((task) => {
+    const entry = {
+      ID: task.sourceId,
+      Title: task.name,
+      start: msToDateString(task.startMs),
+      end: msToDateString(task.endMs)
+    };
+
+    if (task.description) entry.Description = task.description;
+    if (task.assignee) entry.Assignee = task.assignee;
+    if (task.blocking.length) {
+      entry.Blocking = task.blocking.map((id) => normalizeOutputId(id));
+    }
+    if (task.dependencies.length) {
+      entry["Blocked by"] = task.dependencies.map((id) => normalizeOutputId(id));
+    }
+    if (task.progress) entry.progress = task.progress;
+    if (task.group) entry.group = task.group;
+    if (task.milestone === true) entry.milestone = true;
+
+    return entry;
+  });
 }
 
 function normalizeOutputId(value) {
