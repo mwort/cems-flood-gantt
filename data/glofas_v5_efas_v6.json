@@ -10,7 +10,7 @@
     "ID": 200,
     "Title": "E-suite pushing to dev",
     "start": "2026-07-28",
-    "end": "2026-10-06",
+    "end": "2026-09-15",
     "Blocked by": [
       100
     ],
@@ -64,16 +64,16 @@
   {
     "ID": 800,
     "Title": "v5.0 major release of MR",
-    "start": "2026-09-09",
-    "end": "2026-09-16",
+    "start": "2026-09-16",
+    "end": "2026-09-23",
     "group": "GloFAS v5",
     "milestone": true
   },
   {
     "ID": 900,
     "Title": "v5.1 minor release of other layers",
-    "start": "2026-09-30",
-    "end": "2026-10-07",
+    "start": "2026-10-07",
+    "end": "2026-10-14",
     "group": "GloFAS v5",
     "milestone": true
   },
@@ -81,7 +81,7 @@
     "ID": 1000,
     "Title": "Long-term run",
     "start": "2026-07-20",
-    "end": "2026-09-28",
+    "end": "2026-10-12",
     "Blocking": [
       1100,
       1200,
@@ -92,71 +92,59 @@
   {
     "ID": 1100,
     "Title": "ERIC calibration and evaluation",
-    "start": "2026-10-02",
-    "end": "2026-10-29",
-    "Blocked by": [
-      1000
-    ],
+    "start": "2026-10-13",
+    "end": "2026-11-16",
     "group": "EFAS v6"
   },
   {
     "ID": 1200,
     "Title": "HPP calibration and evaluation",
-    "start": "2026-10-02",
-    "end": "2026-10-29",
-    "Blocked by": [
-      1000
-    ],
+    "start": "2026-10-13",
+    "end": "2026-11-16",
     "group": "EFAS v6"
   },
   {
     "ID": 1300,
     "Title": "Hydro performance layers",
-    "start": "2026-10-02",
-    "end": "2026-10-29",
-    "Blocked by": [
-      1000
-    ],
+    "start": "2026-10-15",
+    "end": "2026-11-15",
     "group": "EFAS v6"
   },
   {
     "ID": 1400,
     "Title": "Long-term run on EWDS",
-    "start": "2026-09-28",
-    "end": "2026-10-05",
-    "Blocked by": [
-      1000
-    ],
+    "start": "2026-10-12",
+    "end": "2026-10-25",
     "group": "EFAS v6"
   },
   {
     "ID": 1500,
     "Title": "MR e-suite",
-    "start": "2026-10-02",
-    "end": "2026-11-27",
+    "start": "2026-10-12",
+    "end": "2027-01-18",
     "group": "EFAS v6"
   },
   {
     "ID": 1600,
     "Title": "Pre-release of MR",
-    "start": "2026-11-04",
-    "end": "2026-11-12",
+    "start": "2026-11-25",
+    "end": "2026-12-02",
     "group": "EFAS v6",
     "milestone": true
   },
   {
     "ID": 1700,
     "Title": "v6.0 MR major release",
-    "start": "2026-11-18",
-    "end": "2026-11-25",
+    "start": "2027-01-13",
+    "end": "2027-01-20",
     "group": "EFAS v6",
     "milestone": true
   },
   {
     "ID": 1800,
     "Title": "v6.1 minor release for extended products",
-    "start": "2026-12-09",
-    "end": "2026-12-17",
+    "start": "2027-02-03",
+    "end": "2027-02-10",
     "group": "EFAS v6",
     "milestone": true
   },
@@ -273,6 +261,14 @@
     "start": "2026-09-16",
     "end": "2026-09-23",
     "Assignee": "Gwyn",
+    "group": "Holidays"
+  },
+  {
+    "ID": 7301,
+    "Title": "Juan away",
+    "start": "2026-07-28",
+    "end": "2026-08-13",
+    "Assignee": "Juan",
     "group": "Holidays"
   }
 ]
