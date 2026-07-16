@@ -1,7 +1,7 @@
 [
   {
     "ID": 100,
-    "Title": "Reanalysis on EWDS",
+    "Title": "Long-term run on EWDS",
     "start": "2026-06-24",
     "end": "2026-07-15",
     "group": "GloFAS v5"
@@ -9,125 +9,156 @@
   {
     "ID": 200,
     "Title": "E-suite pushing to dev",
-    "start": "2026-07-15",
-    "end": "2026-09-30",
+    "start": "2026-07-28",
+    "end": "2026-10-06",
+    "Blocked by": [
+      100
+    ],
     "group": "GloFAS v5"
   },
   {
     "ID": 300,
     "Title": "arching of AIFS",
-    "start": "2026-07-15",
-    "end": "2026-07-31",
+    "start": "2026-07-30",
+    "end": "2026-08-15",
     "group": "GloFAS v5"
   },
   {
     "ID": 400,
     "Title": "MR reforecasts",
-    "start": "2026-07-20",
-    "end": "2026-09-15",
+    "start": "2026-07-29",
+    "end": "2026-09-24",
+    "Blocked by": [
+      100
+    ],
     "group": "GloFAS v5"
   },
   {
     "ID": 500,
     "Title": "Subseasonal thresholds and e-suite",
-    "start": "2026-07-20",
-    "end": "2026-09-15",
+    "start": "2026-07-30",
+    "end": "2026-09-25",
+    "Blocked by": [
+      100
+    ],
     "group": "GloFAS v5"
   },
   {
     "ID": 600,
     "Title": "SEAS5 seasonal reforecasts",
-    "start": "2026-07-20",
-    "end": "2026-09-15",
+    "start": "2026-07-31",
+    "end": "2026-09-26",
+    "Blocked by": [
+      100
+    ],
     "group": "GloFAS v5"
   },
   {
     "ID": 700,
     "Title": "Pre-release of MR",
-    "start": "2026-08-19",
-    "end": "2026-08-26",
+    "start": "2026-08-26",
+    "end": "2026-09-02",
     "group": "GloFAS v5",
     "milestone": true
   },
   {
     "ID": 800,
     "Title": "v5.0 major release of MR",
-    "start": "2026-09-02",
-    "end": "2026-09-07",
+    "start": "2026-09-09",
+    "end": "2026-09-16",
     "group": "GloFAS v5",
     "milestone": true
   },
   {
     "ID": 900,
     "Title": "v5.1 minor release of other layers",
-    "start": "2026-09-23",
-    "end": "2026-09-30",
-    "group": "GloFAS v5"
+    "start": "2026-09-30",
+    "end": "2026-10-07",
+    "group": "GloFAS v5",
+    "milestone": true
   },
   {
     "ID": 1000,
     "Title": "Long-term run",
-    "start": "2026-07-07",
-    "end": "2026-08-07",
+    "start": "2026-07-20",
+    "end": "2026-09-28",
+    "Blocking": [
+      1100,
+      1200,
+      1300
+    ],
     "group": "EFAS v6"
   },
   {
     "ID": 1100,
     "Title": "ERIC calibration and evaluation",
-    "start": "2026-08-08",
-    "end": "2026-09-05",
+    "start": "2026-10-02",
+    "end": "2026-10-29",
+    "Blocked by": [
+      1000
+    ],
     "group": "EFAS v6"
   },
   {
     "ID": 1200,
     "Title": "HPP calibration and evaluation",
-    "start": "2026-08-08",
-    "end": "2026-09-05",
+    "start": "2026-10-02",
+    "end": "2026-10-29",
+    "Blocked by": [
+      1000
+    ],
     "group": "EFAS v6"
   },
   {
     "ID": 1300,
     "Title": "Hydro performance layers",
-    "start": "2026-08-08",
-    "end": "2026-09-05",
+    "start": "2026-10-02",
+    "end": "2026-10-29",
+    "Blocked by": [
+      1000
+    ],
     "group": "EFAS v6"
   },
   {
     "ID": 1400,
     "Title": "Long-term run on EWDS",
-    "start": "2026-08-24",
-    "end": "2026-08-31",
+    "start": "2026-09-28",
+    "end": "2026-10-05",
+    "Blocked by": [
+      1000
+    ],
     "group": "EFAS v6"
   },
   {
     "ID": 1500,
-    "Title": "e-suite",
-    "start": "2026-08-24",
-    "end": "2026-10-20",
+    "Title": "MR e-suite",
+    "start": "2026-10-02",
+    "end": "2026-11-27",
     "group": "EFAS v6"
   },
   {
     "ID": 1600,
     "Title": "Pre-release of MR",
-    "start": "2026-09-21",
-    "end": "2026-09-28",
+    "start": "2026-11-04",
+    "end": "2026-11-12",
     "group": "EFAS v6",
     "milestone": true
   },
   {
     "ID": 1700,
     "Title": "v6.0 MR major release",
-    "start": "2026-10-20",
-    "end": "2026-10-27",
+    "start": "2026-11-18",
+    "end": "2026-11-25",
     "group": "EFAS v6",
     "milestone": true
   },
   {
     "ID": 1800,
     "Title": "v6.1 minor release for extended products",
-    "start": "2026-11-11",
-    "end": "2026-11-18",
-    "group": "EFAS v6"
+    "start": "2026-12-09",
+    "end": "2026-12-17",
+    "group": "EFAS v6",
+    "milestone": true
   },
   {
     "ID": 7000,
@@ -135,16 +166,16 @@
     "start": "2026-07-13",
     "end": "2026-07-20",
     "Description": "1 week away, 3rd week of July.",
-    "Assignee": "AR",
+    "Assignee": "Arthur",
     "group": "Holidays"
   },
   {
     "ID": 7010,
-    "Title": "MH away (3rd week of July)",
+    "Title": "MA away (3rd week of July)",
     "start": "2026-07-13",
     "end": "2026-07-20",
     "Description": "1 week away, 3rd week of July.",
-    "Assignee": "MH",
+    "Assignee": "Mohamed",
     "group": "Holidays"
   },
   {
@@ -153,7 +184,7 @@
     "start": "2026-07-02",
     "end": "2026-07-09",
     "Description": "Holiday period 2/07 to 8/07.",
-    "Assignee": "CM",
+    "Assignee": "Cinzia",
     "group": "Holidays"
   },
   {
@@ -162,7 +193,7 @@
     "start": "2026-07-27",
     "end": "2026-08-16",
     "Description": "Holiday period 27/07 to 15/08.",
-    "Assignee": "CM",
+    "Assignee": "Cinzia",
     "group": "Holidays"
   },
   {
@@ -171,7 +202,7 @@
     "start": "2026-08-07",
     "end": "2026-08-16",
     "Description": "Holiday period 07/08 to 15/08.",
-    "Assignee": "CP",
+    "Assignee": "Christel",
     "group": "Holidays"
   },
   {
@@ -180,7 +211,7 @@
     "start": "2026-07-21",
     "end": "2026-08-08",
     "Description": "Holiday period 21/07 to 07/08.",
-    "Assignee": "EZ",
+    "Assignee": "Ervin",
     "group": "Holidays"
   },
   {
@@ -189,7 +220,7 @@
     "start": "2026-08-17",
     "end": "2026-08-27",
     "Description": "Holiday period 17/08 to 26/08.",
-    "Assignee": "EZ",
+    "Assignee": "Ervin",
     "group": "Holidays"
   },
   {
@@ -198,7 +229,7 @@
     "start": "2026-07-21",
     "end": "2026-08-11",
     "Description": "Holiday period 21/07 to 10/08.",
-    "Assignee": "MW",
+    "Assignee": "Michel",
     "group": "Holidays"
   },
   {
@@ -216,7 +247,7 @@
     "start": "2026-07-19",
     "end": "2026-08-15",
     "Description": "Holiday period 19/07 to 14/08.",
-    "Assignee": "NM",
+    "Assignee": "Nikos",
     "group": "Holidays"
   },
   {
@@ -225,7 +256,7 @@
     "start": "2026-08-24",
     "end": "2026-08-31",
     "Description": "Tentative: last week of August, nothing booked yet.",
-    "Assignee": "KO",
+    "Assignee": "Karen",
     "group": "Holidays"
   },
   {
@@ -233,7 +264,7 @@
     "Title": "GM",
     "start": "2026-07-17",
     "end": "2026-07-26",
-    "Assignee": "GW",
+    "Assignee": "Gwyn",
     "group": "Holidays"
   },
   {
@@ -241,7 +272,7 @@
     "Title": "GM",
     "start": "2026-09-16",
     "end": "2026-09-23",
-    "Assignee": "GW",
+    "Assignee": "Gwyn",
     "group": "Holidays"
   }
 ]
